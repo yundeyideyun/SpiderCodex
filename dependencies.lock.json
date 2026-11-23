@@ -1,0 +1,31 @@
+{
+  "source": "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.4022.49/microsoft.web.webview2.1.0.4022.49.nupkg",
+  "schemaVersion": 1,
+  "nodeMinimumMajor": 22,
+  "version": "1.0.4022.49",
+  "files": [
+    {
+      "sha256": "3C6831B6178B299D951017C3D7BF323B57CAB1B7039AF277526B88E3116259B2",
+      "entry": "lib/net462/Microsoft.Web.WebView2.Core.dll",
+      "file": "Microsoft.Web.WebView2.Core.dll"
+    },
+    {
+      "sha256": "F9FB385DB61724794C8A122504E34F07335B83844F301EAA9FC853BCDE14FE85",
+      "entry": "lib/net462/Microsoft.Web.WebView2.WinForms.dll",
+      "file": "Microsoft.Web.WebView2.WinForms.dll"
+    },
+    {
+      "sha256": "12F7708910E1AAC5CC9AC43603D122F1D2E770AE2651830A07EF8B3117F28C55",
+      "entry": "runtimes/win-x64/native/WebView2Loader.dll",
+      "file": "WebView2Loader.dll"
+    }
+  ],
+  "package": "Microsoft.Web.WebView2",
+  "optionalNodeRuntime": {
+    "version": "24.22.3",
+    "platform": "win-x64",
+    "url": "https://nodejs.org/dist/v24.22.3/node-v24.22.3-win-x64.zip",
+    "archiveSha256": "E612AF99F626AB415EA225AF6BCE5C971FEB448CB5CAE250BB1C3FA50C5F7D9F",
+    "exeSha256": "86FC4785327DB5F5C7558DC6156C543B433C313E813A222E088086222AB4AFA6"
+  }
+}

@@ -1,0 +1,290 @@
+{
+  "schemaVersion": 1,
+  "kind": "unpublished-source-review",
+  "codeLicenseSelected": false,
+  "referenceMediaIncluded": false,
+  "officialClientCodeIncluded": false,
+  "profilesIncluded": false,
+  "files": [
+    {
+      "path": ".gitignore",
+      "sha256": "0B3BAD915231D7912F5866DFBF0E0C04F9AD317483B14BB9FFE3983A6050C942"
+    },
+    {
+      "path": "需求与验收清单.json",
+      "sha256": "582EEF27985CA7791C6D32802C75585AB454C5C57E7A2EA9CA81CE48C95B7F3C"
+    },
+    {
+      "path": "需求与验收清单.md",
+      "sha256": "CCE58FB382C56E478456CE440E68133E4793FEEC905279A932DFB5E7BD990817"
+    },
+    {
+      "path": "assets/desktop-v8.html",
+      "sha256": "63E0968AFFC8575A49C4D999ED8DEFF9FA58E374712EFBC1F8653A4AF31CA6C4"
+    },
+    {
+      "path": "assets/v5/reference-ui.json",
+      "sha256": "BD3024EF808E4F101FDD6CAD920260A56709E2F5BC4A25DA9FCEC9F650CB7E05"
+    },
+    {
+      "path": "assets/v5/rings-source.json",
+      "sha256": "3FFB4038FCAEFB03D1865974D66AB37019A05D0E127BE7820377619A101315B4"
+    },
+    {
+      "path": "assets/v6/alpha-video.js",
+      "sha256": "1824FB60878B238B660CB4A242FAC68C852BD9456C95F5C71BF2256E0F17D8F9"
+    },
+    {
+      "path": "assets/v6/red-collapse.json",
+      "sha256": "8FFFF9E332BAE12977FD8C4304231A8B483C9E90CDAEBBCADB4071192D28CF84"
+    },
+    {
+      "path": "assets/v6/scene-geometry.mjs",
+      "sha256": "F9CB3ECFCDDA3BDDD06AFDE7628D839E2F890694A758D69D2782DD54BFECFF6E"
+    },
+    {
+      "path": "assets/v6/visual.js",
+      "sha256": "25767F7E7C8AB9ACDA922FD8CC6416EACD436EE77E067562EB0BB63BEBED46A7"
+    },
+    {
+      "path": "build.ps1",
+      "sha256": "0F394CD1CFB2FAA43DD5A90D68E4A138DB5135D62DF33050476B54750F7C8DC9"
+    },
+    {
+      "path": "dependencies.lock.json",
+      "sha256": "02DEACFA99667E9BA55F5ED92DCEF9CF0390F7BECCD7CDF8F0434C3B63F9A3CD"
+    },
+    {
+      "path": "docs/BUILD.md",
+      "sha256": "67712026D229F10836C7FE86FC61590EB33FD44A74BB424395573ED998B177DA"
+    },
+    {
+      "path": "docs/CONTRIBUTING.md",
+      "sha256": "5F52E506DED50A17A89696E38956EB1725C756A365478BADF0A7D29BF99DE387"
+    },
+    {
+      "path": "docs/MEDIA.md",
+      "sha256": "1A50C63AE639943538BD36372BF14A86F70C77F3B05B6C05E275CE443C7E04EC"
+    },
+    {
+      "path": "docs/TESTING.md",
+      "sha256": "9B19A41EC0ECBC2DCD3D9B2D8AC706C6A7B1E5A48665F45B7D658CDAA71146C8"
+    },
+    {
+      "path": "package.json",
+      "sha256": "295ED198AEEBE776D07ED58C92034A0DBF95AE7737AEC50F63B4615CEB71727B"
+    },
+    {
+      "path": "README.md",
+      "sha256": "9C04C21F3D7F78CF13B68AA0C123974D2A590692DDAAD0523023787DD2518BF6"
+    },
+    {
+      "path": "runtime/BootController.cs",
+      "sha256": "C0C08ABA86007783538E0EBB6CF3244606826772DF160EF42176372E39B0015F"
+    },
+    {
+      "path": "runtime/Bootstrap.cs",
+      "sha256": "7BAC3CA1F15068D2E2B9F8784F885B4C3D9EA5EFFDF35FAD68599C6B578F6166"
+    },
+    {
+      "path": "runtime/Common.cs",
+      "sha256": "128AD2E82540E128B6856AD1BACE8A8719569E75C4ED424A5071E8171FCE1334"
+    },
+    {
+      "path": "runtime/connect.mjs",
+      "sha256": "2DB84DC79EBB43C4A2555D7B432C7267D7392A98EA4E2343F0E39F75450DCECA"
+    },
+    {
+      "path": "runtime/DailyLauncher.cs",
+      "sha256": "A441DF1E8D8BF38BAD309E342133B45E847C33ABCC32294CA09D458776DA97C4"
+    },
+    {
+      "path": "runtime/DesktopWallpaper.cs",
+      "sha256": "B9DE596FD3B1A63E971EFE4E1EA5E257D260963BC018F875EC6FE61F29C7E38A"
+    },
+    {
+      "path": "runtime/Diagnostics.cs",
+      "sha256": "B76585DBC7A9B90F3B4EE8A521AF1E4C892E975258A39B29454A410E2937E888"
+    },
+    {
+      "path": "runtime/InstalledClient.cs",
+      "sha256": "000F4A6BE04CF8258A371C49E21B50699E2B5C73DB8DD2950F8419662833EECA"
+    },
+    {
+      "path": "runtime/native-appearance.mjs",
+      "sha256": "EB15AAC0DF9871B78756D8E006B3B84BCA8AEF4D016B992F3C58D5510CE7E9B3"
+    },
+    {
+      "path": "runtime/native.manifest",
+      "sha256": "1BE5A2C3DF322FF527D6B580824358E598B25A2D5009443E8E0C86D307132897"
+    },
+    {
+      "path": "runtime/ReleasePointer.cs",
+      "sha256": "601658731D04B36190B05F1F0D31ED2683F434AF332F162EC33FBD517E9D10B2"
+    },
+    {
+      "path": "runtime/ReleaseSelection.cs",
+      "sha256": "10B0580D621C7E959BF6D506DC17699CDB1C57E0987D67BB57F5E8481D2D70E5"
+    },
+    {
+      "path": "runtime/ResizeCompanion.cs",
+      "sha256": "C680DBEB9D8AC1E8A1106E4133C76670EC3431249CF30946675F750BD66B559B"
+    },
+    {
+      "path": "runtime/ResizePreview.cs",
+      "sha256": "3074F4BA4B79D8FF41C8B58E1D03BF3EF31DC059CB42999C6A66C14511B0A58A"
+    },
+    {
+      "path": "runtime/Restore.cs",
+      "sha256": "A7AC04CE666958874DCFC480B15CD0F6F57A861650DDC0DE8B88830BFC6FE1CE"
+    },
+    {
+      "path": "runtime/RuntimeDependencies.cs",
+      "sha256": "91F8C164E7448474205CD33EB60B7A15A2804883413BC3542C6F53DD4304EFCE"
+    },
+    {
+      "path": "runtime/SetupWindow.cs",
+      "sha256": "9BB72C0F13FEDA88E8DEBF729F126EF3CB60CDC98326A999861275AD79BB8B41"
+    },
+    {
+      "path": "runtime/spider-theme.js",
+      "sha256": "BA003E3C4DD4D56455CB01FF21FF8EF5496C2214F6B1CC4E9A22F2DE4C9088D7"
+    },
+    {
+      "path": "runtime/StartupWindowGuard.cs",
+      "sha256": "C5A9FCE0C2204C3601BAC899E6A13E7D7EAE4015E945EC0E861C5BAA92D7ACF0"
+    },
+    {
+      "path": "runtime/target-scope.mjs",
+      "sha256": "20F194529AF9C12B8EAE05A7260FADAB6482FEAC82BE8CB8220B8A71ECFA4EB3"
+    },
+    {
+      "path": "runtime/theme-artwork.mjs",
+      "sha256": "C9BAAE043954C1A744CF5A396E9A184C56479409C1F5A4D5F7F69BC9EEE2688F"
+    },
+    {
+      "path": "runtime/theme-keeper.mjs",
+      "sha256": "62DF8A6567BA3BABBA338FE11C85BBEE776F5DEEAA5442DD6480E99290B3471D"
+    },
+    {
+      "path": "runtime/UserSetup.cs",
+      "sha256": "4EC7758B41BC4276114A60CB95901C4E931B92EBA6D03F1A17FA6BF46F01E21C"
+    },
+    {
+      "path": "scripts/audit-package.ps1",
+      "sha256": "277EAD1AF6D5A95A63CE511BF17026E6086DE96413D48F336525FE9FE0331F4C"
+    },
+    {
+      "path": "scripts/bootstrap-deps.ps1",
+      "sha256": "E50C6B8CA2AFCB1227C4369F0F3379470998E265824D25A7897D3F0B24E0A7DA"
+    },
+    {
+      "path": "scripts/export-source.ps1",
+      "sha256": "13F6D5E36F975B9BC28BB942FB014D9A1EC56932A4B0EA4CF6E0DD131471A8E0"
+    },
+    {
+      "path": "scripts/media-pack.mjs",
+      "sha256": "DCD7CED7E4B8AEF50AEE85B111ECAA91A898ADC2B42D1674006F0685B126FFAB"
+    },
+    {
+      "path": "scripts/prepare-glass-textures.mjs",
+      "sha256": "D76C063AF1D78FAE7808CDA9F64737E6642AC933AC2DB1E8058C18FC3645EFB9"
+    },
+    {
+      "path": "scripts/prepare-install-kit.ps1",
+      "sha256": "9F3A21E460064237261C6823B162396BF3EC04698451EDB438E6575243A412FC"
+    },
+    {
+      "path": "scripts/prepare-release.ps1",
+      "sha256": "BC7B6DC9ECA3FA4E6FEC2B58997C8F8C2BC1E33B7C54B087E820B30D9D5D55BB"
+    },
+    {
+      "path": "scripts/stage-node-runtime.ps1",
+      "sha256": "78F69AB6437D4D93F7A5FC253AB6901F0773B2D946BC81C8F214065276370CD9"
+    },
+    {
+      "path": "scripts/test-contracts.ps1",
+      "sha256": "F1B85089E8CAF9A345717DEB5C527535900C768CF90DF987F827E28D03791883"
+    },
+    {
+      "path": "scripts/test-install-kit.ps1",
+      "sha256": "34B4CA4BE0FEC0999A99CA6344CF15619CE931400C5991E7C7CF8F275F4BFEC6"
+    },
+    {
+      "path": "scripts/verify-release.ps1",
+      "sha256": "74897A1F59E83796D8A4596D5A4610695C43B52E75331268F764071F68A6CF0A"
+    },
+    {
+      "path": "tests/alpha-video.test.mjs",
+      "sha256": "35148E5CE0112A1932565D003479CE27BD5185F253FCF16D2F413712C1160993"
+    },
+    {
+      "path": "tests/BootstrapContracts.cs",
+      "sha256": "AA483B67CE352745E85288589EA710C1E64BFB7F7457952BFE8D82DA3EBB3B50"
+    },
+    {
+      "path": "tests/DependencyContracts.cs",
+      "sha256": "A4BC6A6A41C23BF61071A0882CB81DD132F1B33708BEAF493BC4DDB0C93AE6D8"
+    },
+    {
+      "path": "tests/keeper-payload.test.mjs",
+      "sha256": "000C3AE6FAB6AAA280FE1ED100062600E9E92D635B8FABBDF624915A3361CC95"
+    },
+    {
+      "path": "tests/native-client-session.mjs",
+      "sha256": "B723F0B1344E517EC00E7412A15D4ABE5295F85E5FB797CAD60B3A11AF345D9A"
+    },
+    {
+      "path": "tests/native-client-session.test.mjs",
+      "sha256": "9113AA7EE2ABA30867750F4A9E47880040C4BF702BB7AA22C5C6E7AA5B891D94"
+    },
+    {
+      "path": "tests/NativeContracts.cs",
+      "sha256": "0368C1DB66140E75A2CB3F93D043F14F7E1392DF71986BFC6E95B57E0B1EEA4A"
+    },
+    {
+      "path": "tests/ResizeFrameContracts.cs",
+      "sha256": "B634029B950C6B19A1A846CA147A4CD2B585799F45C6B01FFC498349E761F5E7"
+    },
+    {
+      "path": "tests/scene-geometry.test.mjs",
+      "sha256": "1B7746B8308AE4527F494A49184AA0E9D5F456E0967BB00AD6ED27C775C4D446"
+    },
+    {
+      "path": "tests/SetupIntegration.cs",
+      "sha256": "B03A440C4BD5AFCA8FEF34487C82859E5243B27F9D6DD691B6505A013CAB2F95"
+    },
+    {
+      "path": "tests/SetupWindowIntegration.cs",
+      "sha256": "8FB0884CC47A7F0168ADD84B16F35637D66A32E2E08DD8262FB39EBB3342822D"
+    },
+    {
+      "path": "tests/StartupGuardContracts.cs",
+      "sha256": "F7D5FF52CE8E7DC959C4A55444F6ED1FC4B31A7FF688A008199EE4AC58A68507"
+    },
+    {
+      "path": "tests/StateFileContracts.cs",
+      "sha256": "E2152F078882CC3BAE02909129E1F5F59C601A97AB13A0F3739ACA7368101856"
+    },
+    {
+      "path": "tests/surface-browser.mjs",
+      "sha256": "7EC17F8F439B3F2A85B8295EE9B9837A364BDCDE5C46ABBC5AC2AA8BFE2518A0"
+    },
+    {
+      "path": "tests/surface-fixture.html",
+      "sha256": "CDBDEAB1BD5AE05E19C590B2A147D662330507AC43F854595250C68B36F97F59"
+    },
+    {
+      "path": "tests/target-scope.test.mjs",
+      "sha256": "2C5FF14F5851DB8A594BC16B6CB03FFA62D4D30BDBBF54E92AE2DBDCD45FC7F2"
+    },
+    {
+      "path": "tests/theme-artwork.test.mjs",
+      "sha256": "9BF103D618493C737531DA79649D3F2DDFF4327A3B6EEBE7113448567662FEC5"
+    },
+    {
+      "path": "third-party/WebView2-LICENSE.txt",
+      "sha256": "0AF8F1B807512AAE39C2AC1AA4D0CAE65CABECB6FD554B8439A5162A0D6ECA55"
+    }
+  ]
+}

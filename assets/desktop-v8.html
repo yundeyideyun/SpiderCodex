@@ -1,0 +1,27 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#070b11}#city,#effects,#silk{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}#city{object-fit:cover;filter:brightness(1.14) contrast(1.03) saturate(1.03)}#silk{z-index:1;mix-blend-mode:screen}#effects{z-index:2}
+</style></head><body><video id="city" autoplay loop muted playsinline preload="auto" src="city.mp4"></video><canvas id="effects"></canvas>
+<script>addEventListener('unhandledrejection',e=>chrome.webview.postMessage({kind:'error',message:String(e.reason)}));addEventListener('error',e=>chrome.webview.postMessage({kind:'error',message:e.message}));</script>
+<script type="module">
+import {ReferenceVisual} from './v6/visual.js?rev=20261122-foreground-silk';
+const send=data=>chrome.webview.postMessage(data),city=document.querySelector('#city'),canvas=document.querySelector('#effects');
+const visual=await ReferenceVisual.create(canvas,send);let first=true,frames=0,lastFrames=0,lastTime=performance.now(),muted=false;
+addEventListener('resize',()=>visual.resize());
+chrome.webview.addEventListener('message',({data})=>{
+ if(data.kind==='web'&&!muted)visual.click(data.u,data.v,data.screenWidthRatio);if(data.kind==='bootPointerDown')visual.enter(data.u,data.v);
+ if(data.kind==='mute'){muted=true;if(!visual.boot)visual.clear()}
+ if(data.kind==='resume'){muted=false;if(!visual.boot)visual.clear()}
+ if(data.kind==='beginBoot'){muted=true;city.play().catch(()=>{});visual.begin(data.request)}
+ if(data.kind==='clientReady')visual.ready();
+ if(data.kind==='abortBoot'){visual.abort();muted=false}
+ if(data.kind==='pause'&&!visual.boot){city.pause();visual.clear()}
+ if(data.kind==='play')city.play().catch(()=>{});
+});
+function count(now,meta){frames++;if(first){first=false;send({kind:'ready',width:city.videoWidth,height:city.videoHeight,duration:city.duration,engine:'reference-v8'})}city.requestVideoFrameCallback(count)}city.requestVideoFrameCallback(count);
+city.addEventListener('error',()=>send({kind:'error',message:city.error?.message,code:city.error?.code}));
+setInterval(()=>{const now=performance.now(),q=city.getVideoPlaybackQuality();send({kind:'metrics',fps:(frames-lastFrames)*1000/(now-lastTime),total:q.totalVideoFrames,dropped:q.droppedVideoFrames,paused:city.paused,engine:'reference-v8'});lastFrames=frames;lastTime=now},3000);
+window.spiderReview={seek:async t=>{city.pause();await new Promise(resolve=>{city.addEventListener('seeked',resolve,{once:true});city.currentTime=(4.43+t)%city.duration});await visual.seek(t,window.__SPIDER_REVIEW_SCREEN_WIDTH_RATIO__||1);return true;}};
+window.spiderReview.play=({readyAfter=2000}={})=>{city.play();visual.begin({id:'offscreen-review',origin:[453/1920,480/1080],target:[946/1920,432/1080],mask:[947/1920,518/1080]});setTimeout(()=>visual.ready(),readyAfter);return true;};
+window.spiderReview.stressClicks=async()=>{for(let i=0;i<40;i++){visual.click(.5,.4);await new Promise(r=>setTimeout(r,5))}await new Promise(r=>setTimeout(r,3000));send({kind:'stressFinished',clicks:40});return true};
+</script></body></html>
+

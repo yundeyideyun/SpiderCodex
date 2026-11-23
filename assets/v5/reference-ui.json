@@ -1,0 +1,28 @@
+{
+  "referenceWidth": 1920,
+  "referenceHeight": 1080,
+  "maskCenter": [
+    947,
+    518
+  ],
+  "maskBox": [
+    766.5,
+    337.5,
+    361.0,
+    361.0
+  ],
+  "titleBox": [
+    796,
+    787,
+    190,
+    50
+  ],
+  "workspaceBox": [
+    994,
+    788,
+    138,
+    48
+  ],
+  "foregroundSilkBox": [1210, 420, 710, 620],
+  "source": "User-provided reference video, original 3840x2160 frame; only recorded pointer repaired."
+}

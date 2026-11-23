@@ -1,0 +1,15 @@
+{
+  "box": [
+    676.0,
+    247.0,
+    542.0,
+    542.0
+  ],
+  "center": [
+    947,
+    518
+  ],
+  "referenceBootTime": 6.65,
+  "observedDegreesPerSecond": 0.0,
+  "note": "Reference ring geometry recovered from 50s; complete circle stroke profiles calibrated from clear reference angles; angular motion measured between 50s and 51s."
+}

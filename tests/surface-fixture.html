@@ -1,0 +1,891 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Theme surface fixture</title>
+<style>
+  body { font: 16px system-ui; background: white }
+  .bg-surface { background-color: white }
+  .text-secondary { color: var(--color-text-secondary, #515151) }
+  .text-tertiary { color: var(--color-text-tertiary, #6b6b6b) }
+  .sidebar-item.native-muted, .sidebar-item.native-muted .text-conversation-title { color: oklab(.226 -.0013 -.0064 / .85); }
+  .fixture { padding: 12px }
+</style>
+<div id="root"></div>
+<script type="module">
+import install from './theme-fixture-module.mjs';
+import {addLoadingPreview} from './target-scope-fixture.mjs';
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+const send = response => {
+  const record = document.createElement('pre');
+  record.id = 'fixture-result';
+  record.textContent = JSON.stringify(response);
+  document.body.append(record);
+};
+const root = document.getElementById('root');
+root.innerHTML = '<section><h1>登录 Codex</h1><button id="action" class="bg-surface">继续登录</button></section>';
+function colors(id) {
+  const style = getComputedStyle(document.getElementById(id));
+  return {background: style.backgroundColor, foreground: style.color};
+}
+function rgba(value) {
+  const channels = value.match(/[\d.]+/g).map(Number);
+  return [channels.slice(0,3),channels[3] ?? 1];
+}
+function composite(value,base) {
+  const [channels,alpha]=rgba(value);
+  return channels.map((channel,index)=>channel*alpha+base[index]*(1-alpha));
+}
+function luminance(rgb) {
+  return rgb.map(value=>value/255).map((value,index)=>
+    (value<=.04045?value/12.92:((value+.055)/1.055)**2.4)*[.2126,.7152,.0722][index]
+  ).reduce((total,value)=>total+value,0);
+}
+const texturePeaks=new Map();
+async function measureTexture(texture){
+  const url=JSON.parse(texture.slice(4,-1)),image=new Image();image.src=url;
+  for(let i=0;i<40&&(!image.complete||!image.naturalWidth);i++)await wait(10);
+  if(!image.complete||!image.naturalWidth)throw Error('Material texture did not decode for pixel contrast inspection');
+  const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;
+  const context=canvas.getContext('2d');context.drawImage(image,0,0);
+  const pixels=context.getImageData(0,0,canvas.width,canvas.height).data;
+  let peak=[0,0,0],light=0;
+  for(let i=0;i<pixels.length;i+=4){
+    // A white underlying page is the conservative case for translucent glass.
+    const alpha=pixels[i+3]/255,color=[0,1,2].map(c=>pixels[i+c]*alpha+255*(1-alpha));
+    const value=luminance(color);if(value>light){light=value;peak=color;}
+  }
+  texturePeaks.set(url,peak);
+}
+function contrast(id,pseudo) {
+  const el=document.getElementById(id);
+  // Assume a bright wallpaper and exclude body/root solid fallback, which is covered by the image.
+  const layers=[];
+  for(let node=el;node&&node!==root;node=node.parentElement){
+    const style=getComputedStyle(node);
+    const brightness=Number(style.backdropFilter.match(/brightness\(([\d.]+)\)/)?.[1]??1);
+    const texture=[...texturePeaks].find(([url])=>style.backgroundImage.includes(url));
+    layers.unshift({color:style.backgroundColor,brightness,texture:texture?.[1]});
+  }
+  const art=composite(getComputedStyle(document.body).backgroundColor,[255,255,255]);
+  const bg=layers.reduce((base,{color,brightness,texture})=>{
+    const under=composite(color,base.map(channel=>channel*brightness));
+    // The material's top scrim is at least 12% dark; test its brightest end.
+    return texture?composite('rgba(24,17,27,.12)',texture):under;
+  },art);
+  const fg=composite(getComputedStyle(el,pseudo).color,bg);
+  const values=[luminance(fg),luminance(bg)].sort((a,b)=>b-a);
+  return Number(((values[0]+.05)/(values[1]+.05)).toFixed(2));
+}
+async function resizeWorkspace(){
+  const frame=document.createElement('iframe');
+  frame.style='position:fixed;left:0;top:0;border:0;opacity:0;pointer-events:none;width:1060px;height:800px';
+  frame.srcdoc=`<!doctype html><style>body{margin:0} main{position:absolute;left:124px;top:36px;width:920px;height:735px}
+  [data-home-feed-composer]{height:430px} h1{margin:0}</style><div id="root"><main data-app-shell-main-surface>
+  <h1 data-feature="game-source">Start</h1><section data-home-feed-composer class="ComposerLayoutRoot-fixture">
+  <textarea data-codex-composer></textarea></section></main></div>
+  <script type="module">import install from './theme-fixture-module.mjs';window.resizeTheme=install({wallpaper:'about:blank'});<\/script>`;
+  try {
+    const loaded=new Promise(resolve=>frame.addEventListener('load',resolve,{once:true}));
+    document.body.append(frame);
+    await loaded;
+    const inner=frame.contentWindow;
+    if(!inner.resizeTheme?.ok)throw Error('Resize fixture did not install');
+    const editor=inner.document.querySelector('[data-home-feed-composer]');
+    const title=inner.document.querySelector('h1');
+    const results=[];
+    for(const [width,height,special] of [[1060,800,true],[920,735,true],[735,665,true],[603,665,false],[735,560,false],[735,665,true],[1060,800,true]]){
+      frame.style.width=width+'px';
+      frame.style.height=height+'px';
+      // Flush the frame dimensions before notifying the child. The headless
+      // virtual clock can defer native iframe resize events until a paint.
+      frame.getBoundingClientRect();
+      const actualWidth=inner.innerWidth,actualHeight=inner.innerHeight;
+      inner.dispatchEvent(new inner.Event('resize'));
+      await wait(40);
+      const active=editor.hasAttribute('data-spider-home-composer');
+      const box=editor.getBoundingClientRect();
+      const contained=!active||(box.left>=0&&box.right<=inner.innerWidth&&box.bottom<=inner.innerHeight&&title.getBoundingClientRect().bottom<=box.top);
+      results.push({width,height,actualWidth,actualHeight,active,contained,
+        passed:actualWidth===width&&actualHeight===height&&active===special&&contained});
+    }
+    return results;
+  }finally{frame.remove()}
+}
+try {
+  const art=document.createElement('canvas');art.width=64;art.height=40;
+  const artContext=art.getContext('2d');
+  const ramp=artContext.createLinearGradient(0,0,64,40);
+  ramp.addColorStop(0,'#222a55');ramp.addColorStop(1,'#ffefe9');
+  artContext.fillStyle=ramp;artContext.fillRect(0,0,64,40);
+  const useActualPointer=new URL(location.href).searchParams.has('native-pointer');
+  const hoverFixture=(element,step)=>new Promise(resolve=>{
+    const rect=element.getBoundingClientRect();
+    window.fixturePointerStep={step,x:rect.left+rect.width/2,y:rect.top+rect.height/2};
+    window.finishFixturePointerStep=resolve;
+  });
+  const wallpaperSource=art.toDataURL();
+  const theme = install({wallpaper: wallpaperSource});
+  const reflectionLayer=document.querySelector('[data-spider-hover-light]');
+  const reflectionNonInteractive=!!reflectionLayer&&getComputedStyle(reflectionLayer).pointerEvents==='none'&&reflectionLayer.getAttribute('aria-hidden')==='true'&&
+    !document.querySelector('[data-spider-hover-water]');
+  const usesFrostedArt=element=>{
+    const style=getComputedStyle(element);
+    return /^(none|blur\((4|7)px\)( saturate\(1\.12\))?)$/.test(style.backdropFilter)&&style.backgroundImage.match(/data:image|blob:/)!==null;
+  };
+  for(let i=0;i<40&&(!document.documentElement.style.getPropertyValue('--spider-frosted-art')||!document.documentElement.style.getPropertyValue('--spider-clear-art'));i++)await wait(20);
+  await measureTexture(window.__SPIDER_CODEX_V3__.artworkCache.frostTexture);
+  await measureTexture(window.__SPIDER_CODEX_V3__.artworkCache.clearTexture);
+  const preparedTexturesShort=['frost','clear'].every(kind=>window.__SPIDER_CODEX_V3__.artworkCache[kind+'Url']?.startsWith('blob:')&&window.__SPIDER_CODEX_V3__.artworkCache[kind+'Texture'].length<120);
+  const auth = document.getElementById('action');
+  const authStyled = auth.hasAttribute('data-spider-auth-primary') && theme.surface === 'login';
+  auth.textContent = '使用其他方式登录';
+  await wait(130);
+  const authActionRestyled=!auth.hasAttribute('data-spider-auth-primary')&&auth.hasAttribute('data-spider-auth-secondary');
+  auth.textContent = 'Current choice';
+
+  const settings = document.createElement('main');
+  settings.className = 'no-drag bg-surface';
+  settings.innerHTML = `
+    <h1>Settings</h1>
+    <button aria-label="Back to home">Back</button>
+    <section class="bg-surface" id="panel">Background</section>
+    <div class="rounded-2xl fixture group/settings:section">
+      <span id="settings-description" class="text-tertiary">Changes apply at next startup</span>
+      <button id="settings-action" class="bg-surface text-secondary">Manage</button>
+      <input id="settings-field" placeholder="Filter settings">
+      <input id="settings-search" placeholder="搜索" style="border:1px solid white;background:white">
+      <button id="settings-disabled" disabled>Unavailable</button>
+      <button id="settings-trigger" aria-haspopup="listbox" style="background:white;color:white"><span id="settings-value" style="color:white">PowerShell</span></button>
+      <button id="disabled-trigger" aria-haspopup="menu" style="background:white;color:white" disabled>Unavailable</button>
+      <button id="language-trigger" class="bg-white" style="background:white;color:white"><span>中文</span><span id="theme-preview-label" style="background-color:white;color:#a4312e">Aa</span></button>
+      <button id="compact-disclosure" class="p-0 border-0" aria-controls="fixture-advanced" style="padding:0">高级 <svg width="16" height="16"></svg></button>
+      <button id="capsule-switch" role="switch" aria-checked="true" style="display:inline-flex;width:32px;height:20px;padding:0;border:0"><span id="capsule-track" style="width:32px;height:20px;border-radius:999px;display:inline-flex"></span></button>
+      <div style="width:240px"><button id="long-popup-control" class="w-full" aria-haspopup="menu" style="width:100%;height:30px">Only when using the close shortcut</button></div>
+      <button><div class="pointer-events-none"><div id="mini-preview-material" class="Material-fixture" style="background:rgba(255,255,255,.9)"><span>Mini preview</span></div></div></button>
+      <div class="size-9"><img id="plugin-brand-icon" class="object-contain" alt="Plugin logo" width="34" height="34"></div>
+    </div>
+    <nav role="tablist"><button role="tab">常规 <svg id="settings-nav-icon" width="12" height="12" style="color:#1b1418;opacity:.35"><path d="M0 0h10v10H0z" fill="currentColor"/></svg></button></nav>
+    <div id="quota-group" class="rounded-2xl"><div class="group/settings-row"><span class="text-end">Remaining 33%</span><progress id="quota-progress" value="33" max="100" aria-label="Remaining usage"></progress></div></div>
+    <div id="dialog" role="dialog" class="fixture bg-surface">Confirm selection
+      <div class="react-colorful"><div id="native-color-saturation" class="react-colorful__saturation" style="background-color:rgb(255,0,0)"><div role="slider" aria-label="Color" tabindex="0"></div></div></div>
+    </div>
+    <div id="menu" role="menu" class="fixture bg-surface">Choose label</div>
+    <div id="tooltip" role="tooltip" class="fixture bg-surface">Usage remaining</div>
+    <div id="listbox" role="listbox" class="fixture bg-surface">
+      <div id="list-option" role="option" aria-selected="true" tabindex="0" class="text-tertiary">One option</div>
+    </div>
+    <div role="alertdialog" class="fixture bg-surface"><span id="alert-caption" class="text-secondary">Confirm changes</span></div>`;
+  settings.append(auth);
+  const codeHost=document.createElement('diffs-container');
+  const codeShadow=codeHost.attachShadow({mode:'open'});
+  codeShadow.innerHTML='<style>:host{display:block;color-scheme:light;color:#0d0d0d;background:#ffffff}pre{color:inherit;background:#eeeeee}</style><pre data-file><span style="color:#0d0d0d">const</span> <span style="color:#751ed9">value</span></pre>';
+  settings.append(codeHost);
+  const dockSend=document.createElement('button');dockSend.className='bg-composer-primary';dockSend.setAttribute('aria-label','Send');dockSend.textContent='Send';settings.append(dockSend);
+  const actionStates=[['停止','bg-composer-primary',false],['Stop','bg-composer-primary',false],['End voice','size-token-button-composer bg-codex-icon',false],['Start voice','size-token-button-composer',true]];
+  const stateButtons=actionStates.map(([label,classes,voice])=>{const b=document.createElement('button');b.className=classes;b.setAttribute('aria-label',label);if(voice)b.setAttribute('data-composer-voice-start','');b.innerHTML='<svg viewBox="0 0 12 12"><rect width="12" height="12" fill="currentColor"/></svg>';settings.append(b);return b});
+  root.replaceChildren(settings);
+  await wait(250);
+  const floating = ['dialog', 'menu', 'tooltip', 'listbox'].map(colors);
+  const popoversReadable = floating.every((pair,index) =>
+    pair.background === (index===2?'rgb(48, 34, 45)':'rgba(35, 25, 34, 0.14)') && pair.foreground === 'rgb(255, 245, 238)');
+  const settingsContinuous = colors('panel').background === 'rgba(0, 0, 0, 0)';
+  const nativeOverflow = document.createElement('style');
+  nativeOverflow.textContent = '@layer utilities{.native-unbounded{max-height:none!important;overflow-y:visible!important}}';
+  document.head.append(nativeOverflow);
+  const pickerAnchor = document.createElement('div');
+  pickerAnchor.setAttribute('data-radix-popper-content-wrapper','');
+  pickerAnchor.style.cssText='position:fixed;left:40px;top:calc(100vh - 148px);--radix-popper-available-height:400px';
+  const pickerList = document.createElement('div');
+  pickerList.setAttribute('role','listbox');
+  pickerList.className='native-unbounded';
+  for(let i=0;i<66;i++){
+    const choice=document.createElement('div');
+    choice.setAttribute('role','option');
+    choice.style.height='24px';
+    choice.textContent='Option '+(i+1);
+    pickerList.append(choice);
+  }
+  pickerAnchor.append(pickerList);
+  document.body.append(pickerAnchor);
+  await wait(125);
+  pickerList.scrollTop=pickerList.scrollHeight;
+  const pickerBounds=pickerList.getBoundingClientRect();
+  const lastPickerOption=pickerList.lastElementChild.getBoundingClientRect();
+  const languageListContained=pickerBounds.bottom<=innerHeight-7&&pickerList.scrollTop>0&&
+    lastPickerOption.bottom<=pickerBounds.bottom+1&&getComputedStyle(pickerList).overflowY==='auto';
+  pickerAnchor.remove();nativeOverflow.remove();
+  const compactStyle=getComputedStyle(document.getElementById('compact-disclosure'));
+  const capsuleStyle=getComputedStyle(document.getElementById('capsule-switch'));
+  const compactControlComfortable=parseFloat(compactStyle.paddingLeft)>=6&&parseFloat(compactStyle.paddingRight)>=6&&parseFloat(compactStyle.minHeight)>=28&&parseFloat(compactStyle.borderTopWidth)===0;
+  const switchShapeAligned=parseFloat(capsuleStyle.borderTopLeftRadius)>=10&&document.getElementById('capsule-switch').getAttribute('aria-checked')==='true'&&
+    Math.abs(document.getElementById('capsule-switch').getBoundingClientRect().width-document.getElementById('capsule-track').getBoundingClientRect().width)<.6;
+  document.getElementById('long-popup-control').dispatchEvent(new PointerEvent('pointerover',{bubbles:true,composed:true,pointerType:'mouse'}));
+  const standalonePopupNotFlattened=!document.getElementById('long-popup-control').hasAttribute('data-spider-row-action')&&!document.getElementById('long-popup-control').hasAttribute('data-spider-raised-row');
+  const miniPreviewIntegrated=colors('mini-preview-material').background==='rgba(35, 25, 34, 0.14)';
+  const pluginLogoFilter=getComputedStyle(document.getElementById('plugin-brand-icon')).filter;
+  const pluginLogoPreservesColor=pluginLogoFilter.includes('drop-shadow')&&!/brightness|invert|grayscale/.test(pluginLogoFilter);
+  const colorPickerPreserved=colors('native-color-saturation').background==='rgb(255, 0, 0)';
+  const quota=document.getElementById('quota-progress'),quotaGroup=document.getElementById('quota-group');
+  const quotaPresentation=quota.value===33&&quota.max===100&&quotaGroup.hasAttribute('data-spider-quota-group')&&
+    quota.closest('[data-spider-quota-row]')&&getComputedStyle(quota).appearance==='none'&&
+    /剩余|remaining/i.test(getComputedStyle(quotaGroup,'::after').content);
+  const codeToken=codeShadow.querySelector('span');
+  const codePresentation=codeHost.hasAttribute('data-spider-code-surface')&&codeHost.hasAttribute('data-spider-glass-aligned')&&
+    getComputedStyle(codeHost).textShadow==='none'&&getComputedStyle(codeShadow.querySelector('pre')).backgroundColor==='rgba(0, 0, 0, 0)'&&
+    getComputedStyle(codeToken).color==='rgb(255, 245, 238)'&&codeToken.getAttribute('style')==='color:#0d0d0d';
+  const laterToken=document.createElement('span');laterToken.setAttribute('style','color:#008809');laterToken.textContent='string';codeShadow.querySelector('pre').append(laterToken);
+  await wait(40);
+  const lazyCodeTokenReadable=luminance(rgba(getComputedStyle(laterToken).color)[0])>=.62;
+  const dockStyle=getComputedStyle(dockSend);
+  const dockSendGlass=dockStyle.backgroundImage.includes('linear-gradient')&&dockStyle.backgroundColor==='rgba(0, 0, 0, 0)'&&dockStyle.backdropFilter.includes('blur(2.5px)');
+  const primaryStatesUnified=stateButtons.every((button,index)=>{
+    const style=getComputedStyle(button),icon=getComputedStyle(button.querySelector('svg'));
+    const stop=index<2;
+    return style.backgroundImage.includes('linear-gradient')&&style.backgroundColor==='rgba(0, 0, 0, 0)'&&
+      style.backgroundImage.includes(stop?'rgba(250, 85, 100,':'rgba(252, 144, 117,')&&
+      style.backdropFilter.includes('blur(2.5px)')&&icon.color===(stop?'rgb(255, 192, 194)':'rgb(255, 247, 240)');
+  })&&getComputedStyle(dockSend).backgroundImage.includes('rgba(249, 107, 115,');
+  dockSend.disabled=true;
+  const disabledPrimary=getComputedStyle(dockSend);
+  const primaryDisabledDistinct=dockSend.matches(':disabled')&&disabledPrimary.backgroundImage.includes('rgba(205, 183, 192,')&&
+    disabledPrimary.backdropFilter==='none'&&disabledPrimary.color==='rgb(217, 197, 202)';
+  dockSend.disabled=false;
+  const orientation=document.createElement('button');orientation.className='bg-composer-primary';orientation.style='transform:rotate(30deg);translate:0 -2px';settings.append(orientation);
+  document.documentElement.setAttribute('data-reduced-motion','true');
+  const reducedMotionKeepsOrientation=getComputedStyle(orientation).translate==='none'&&getComputedStyle(orientation).transform!=='none'&&getComputedStyle(orientation).transitionProperty==='none';
+  document.documentElement.removeAttribute('data-reduced-motion');orientation.remove();
+  const roleTagReleased = !auth.hasAttribute('data-spider-auth-primary');
+  const readings={
+    settingsDescription:contrast('settings-description'),
+    settingsAction:contrast('settings-action'),
+    settingsField:contrast('settings-field','::placeholder'),
+    selection:contrast('list-option'),
+    confirm:contrast('alert-caption'),
+    nativeSelectValue:contrast('settings-value'),
+    disabledSelectValue:contrast('disabled-trigger'),
+  };
+  const selectedVisible=colors('list-option').background!=='rgba(0, 0, 0, 0)';
+  const field=document.querySelector('#settings-field');
+  const enabledField=getComputedStyle(field);
+  const fieldBoundary=enabledField.borderTopStyle==='solid'&&enabledField.borderTopColor==='rgb(171, 138, 135)';
+  field.focus();
+  await wait(16);
+  const focusedField=getComputedStyle(field);
+  const focus={
+    active:document.activeElement===field,visible:field.matches(':focus'),windowFocused:document.hasFocus(),
+    style:focusedField.outlineStyle,width:parseFloat(focusedField.outlineWidth),color:focusedField.outlineColor
+  };
+  const focusVisible=focus.active&&focus.visible&&focus.style==='solid'&&focus.width>=1.5&&focus.color==='rgb(255, 190, 159)';
+  const focusTreatmentExpected=focusVisible||(!focus.windowFocused&&focus.active&&!focus.visible);
+  const settingSearch=document.getElementById('settings-search');
+  settingSearch.focus();
+  await wait(16);
+  const searchStyle=getComputedStyle(settingSearch);
+  const searchAppearance={outline:searchStyle.outlineStyle,background:searchStyle.backgroundColor,border:searchStyle.borderTopColor,shadow:searchStyle.boxShadow};
+  const searchIntegrated=searchStyle.outlineStyle==='none'&&searchStyle.backgroundColor==='rgba(0, 0, 0, 0)'&&
+    searchStyle.borderTopColor==='rgba(0, 0, 0, 0)'&&(!document.hasFocus()||searchStyle.boxShadow.includes('inset'));
+  const icon=getComputedStyle(document.getElementById('settings-nav-icon'));
+  const generalIconReadable=icon.color==='rgb(255, 245, 238)'&&icon.opacity==='1';
+  const disabledStillDisabled=document.querySelector('#settings-disabled').matches(':disabled')&&
+    document.querySelector('#disabled-trigger').matches(':disabled')&&Number(getComputedStyle(document.querySelector('#disabled-trigger')).opacity)===.6;
+  const languageBlend=colors('language-trigger').background==='rgba(0, 0, 0, 0)'&&
+    getComputedStyle(document.querySelector('#language-trigger span')).color==='rgb(255, 245, 238)'&&
+    getComputedStyle(document.querySelector('#theme-preview-label')).color==='rgb(164, 49, 46)';
+  settings.querySelector('h1').textContent='Appearance';
+  await wait(250);
+  const settingsChild=window.__SPIDER_CODEX_V3__.diagnose().surface;
+  const settingsChildPanel=settings.querySelector('[data-spider-glass-panel]');
+  const settingsChildStyled=settingsChild==='settings'&&settingsChildPanel&&usesFrostedArt(settingsChildPanel);
+  const legacySettingsClass=settings.className;
+  const legacyBack=settings.querySelector('button[aria-label^="Back"]');
+  settings.className='MainContentSurface-native';
+  settings.setAttribute('data-app-shell-main-surface','default');
+  if(legacyBack)legacyBack.hidden=true;
+  await wait(150);
+  const integratedSettingsStyled=window.__SPIDER_CODEX_V3__.diagnose().surface==='settings'&&
+    settings.hasAttribute('data-spider-settings')&&settingsChildPanel.hasAttribute('data-spider-glass-aligned');
+  settings.className=legacySettingsClass;
+  settings.removeAttribute('data-app-shell-main-surface');
+  if(legacyBack)legacyBack.hidden=false;
+  settings.querySelector('h1').textContent='Settings';
+  const settingsHost=document.createElement('main');settingsHost.className='no-drag bg-surface';
+  settingsHost.innerHTML='<header><button aria-label="Back to ChatGPT">Back</button></header><webview style="display:block;width:400px;height:240px"></webview>';
+  document.getElementById('root').append(settingsHost);
+  await wait(140);
+  const hostSuspended=window.__SPIDER_CODEX_V3__.diagnose().surface==='settings-host'&&
+    document.documentElement.dataset.spiderCodex==='suspended'&&!settingsHost.hasAttribute('data-spider-settings');
+  // Electron keeps the guest mounted under a visibility:hidden wrapper.
+  const guestWrapper=document.createElement('div');
+  guestWrapper.style.visibility='hidden';
+  settingsHost.replaceWith(guestWrapper);
+  guestWrapper.append(settingsHost);
+  await wait(140);
+  const externalSettingsHostSafe=hostSuspended&&window.__SPIDER_CODEX_V3__.diagnose().surface==='settings'&&
+    document.documentElement.dataset.spiderCodex==='on';
+  guestWrapper.remove();
+  const settingsModal=document.createElement('div');
+  settingsModal.className='settings-dialog';settingsModal.setAttribute('role','dialog');
+  settingsModal.innerHTML='<nav class="settings-dialog-nav-list"><button>General</button></nav><div class="settings-dialog-content">Options</div>';
+  document.body.append(settingsModal);
+  await wait(140);
+  const portalSettingsRecognized=window.__SPIDER_CODEX_V3__.diagnose().surface==='settings'&&
+    settingsModal.hasAttribute('data-spider-settings')&&usesFrostedArt(settingsModal)&&
+    settingsModal.querySelector('.settings-dialog-content').hasAttribute('data-spider-settings-pane');
+  settingsModal.remove();
+  await wait(140);
+  const recycledPanel=settings.querySelector('[data-spider-glass-panel]')||
+    settings.querySelector('div[class*="/settings:"]');
+  const panelRole=recycledPanel.className;
+  recycledPanel.className='bg-surface fixture';
+  await wait(130);
+  const cleanAfterClassChange=!recycledPanel.hasAttribute('data-spider-glass-panel')&&
+    getComputedStyle(recycledPanel).backdropFilter==='none';
+  recycledPanel.className=panelRole;
+  await wait(130);
+  const glassRestoredAfterReturning=recycledPanel.hasAttribute('data-spider-glass-panel');
+
+  const workspace = document.createElement('main');
+  workspace.style = 'display:flex;flex-direction:column;width:820px;height:640px';
+  workspace.setAttribute('data-app-shell-main-surface','');
+  workspace.innerHTML = '<h1 data-feature="game-source">Start</h1><div data-home-feed-composer class="ComposerLayoutRoot-fixture"><div class="composer-surface-chrome"><textarea id="composer-input" data-codex-composer placeholder="Text"></textarea><button id="composer-action" class="text-tertiary">Choose model</button><button aria-label="Attach file"><svg><path id="attachment-icon" fill="currentColor" d="M0 0h10v10H0z"/></svg></button></div></div><article data-local-conversation-final-assistant class="bg-surface"><p id="stream" data-markdown-text-style="assistant-message">Reply</p></article>';
+  const aside=document.createElement('aside');
+  aside.className='app-shell-left-panel';
+  aside.innerHTML='<nav class="group/sidebar-rail" style="position:fixed;left:13px;top:66px;height:300px"><button data-sidebar-destination="builtin:home">Home</button></nav><section class="sidebar-navigation"><button id="sidebar-row" class="sidebar-item native-muted"><span id="sidebar-title" class="text-conversation-title">Conversation</span></button><button id="sidebar-disabled" class="sidebar-item native-muted" disabled>Unavailable</button></section>';
+  const menubar=document.createElement('div');
+  menubar.setAttribute('role','menubar');
+  menubar.innerHTML='<button id="top-menu-item" role="menuitem">File</button>';
+  root.replaceChildren(menubar,aside,workspace);
+  recycledPanel.className='bg-surface fixture';
+  workspace.append(recycledPanel);
+  aside.querySelector('.sidebar-navigation').insertAdjacentHTML('afterbegin',
+    '<button id="sidebar-mode" aria-haspopup="menu" style="color:#161616"><span class="text-default" style="color:#161616">Mode</span></button><button id="sidebar-selected" data-app-action-sidebar-thread-selected="true" style="color:#161616">Current</button><span data-marquee-content><span><span id="native-title" style="color:oklab(.225 0 0 / .85)">Native title</span></span></span>');
+  workspace.insertAdjacentHTML('beforeend',
+    '<div class="bg-user-message"><p id="user-text" data-markdown-text-style="user-message">Message</p></div><div data-radix-popper-content-wrapper><div id="composer-popup" style="background:transparent"><button id="popup-item"><span class="text-default" style="color:#161616">Attach file</span></button></div></div>');
+  workspace.querySelector('.composer-surface-chrome').insertAdjacentHTML('beforeend',
+    '<button aria-label="添加文件等内容" data-state="closed">＋</button><button class="text-orange-600" aria-label="Full access"><span id="permission-label" class="ComposerDropdownLabelValue-fixture" style="color:rgb(226,85,7)">Permissions</span></button><button id="send-action" class="bg-composer-primary">Send</button>');
+  aside.querySelector('.sidebar-navigation').insertAdjacentHTML('afterbegin','<button class="sidebar-item">新聊天 <svg id="new-chat-icon" width="12" height="12" style="color:#15151b;opacity:.5"><path d="M0 0h10v10H0z" fill="currentColor"/></svg></button>');
+  workspace.insertAdjacentHTML('beforeend',`
+    <div id="activity-surface" class="group/activity-header" style="position:relative"><span class="block"><span id="activity-label" style="color:rgb(255 245 238 / .385)">Inspecting</span></span><button id="activity-hit" class="absolute" style="position:absolute;inset:0;border:0;background:transparent"></button></div>
+    <button class="text-codex-description" style="background:transparent">
+      <span id="activity-duration" class="text-codex-description tabular-nums" style="color:rgba(26,28,31,.494)">2 seconds</span>
+    </button>
+    <button class="group-last/turn-diff-file-row:rounded-b-lg" style="background:transparent">
+      <span id="changed-file-label" class="text-codex-description" style="color:rgb(255 245 238 / .7)">Source file</span>
+      <span id="added-count" class="text-codex-git-added" style="color:rgb(0,162,64)">+5</span>
+      <span id="deleted-count" class="text-codex-git-deleted" style="color:rgb(186,38,35)">-3</span>
+    </button>
+    <div id="fixture-diff-card" class="rounded-lg [--resource-card-row-padding-x:12px]" style="width:420px;max-width:100%;overflow:hidden">
+    <div class="group/turn-diff-header">
+      <div id="change-icon-plate" class="bg-surface-secondary/92" style="background:white">+</div>
+      <button id="view-changes" class="bg-background-neutral-soft-alpha" style="background:rgba(255,255,255,.96)">View changes</button>
+    </div>
+    <button class="w-full px-[var(--resource-card-row-padding-x)]" style="width:100%;height:36px;border:0">source/file.js</button>
+    <button id="fixture-diff-footer" class="rounded-b-lg px-[var(--resource-card-row-padding-x)]" style="width:100%;height:36px;border:0">More files</button>
+    </div>
+    <div cmdk-root id="command-palette"><div cmdk-list><button>Attach</button></div></div>
+    <div style="opacity:0" id="hidden-message-time"><span data-assistant-message-sent-time>11:00</span></div>`);
+  const sentPicture=document.createElement('div');sentPicture.id='sent-picture';sentPicture.className='size-20';sentPicture.setAttribute('role','button');sentPicture.style='width:80px;height:80px;border:1px solid white;flex-shrink:0';
+  sentPicture.innerHTML='<img class="h-full w-full rounded-md object-cover" style="width:100%;height:100%;object-fit:cover" alt="Fixture screenshot">';sentPicture.firstElementChild.src=wallpaperSource;workspace.append(sentPicture);
+  await wait(250);
+  readings.composerPlaceholder=contrast('composer-input','::placeholder');
+  readings.modelButton=contrast('composer-action');
+  readings.attachmentIcon=contrast('attachment-icon');
+  readings.viewChanges=contrast('view-changes');
+  const diffControlsVisible=colors('change-icon-plate').background==='rgba(255, 245, 238, 0.1)'&&colors('view-changes').background==='rgba(29, 34, 47, 0.58)';
+  const fileCardCornersAligned=document.getElementById('fixture-diff-card').hasAttribute('data-spider-diff-card')&&
+    document.getElementById('fixture-diff-footer').hasAttribute('data-spider-diff-end')&&getComputedStyle(document.getElementById('fixture-diff-card')).borderBottomLeftRadius===getComputedStyle(document.getElementById('fixture-diff-footer')).borderBottomLeftRadius;
+  document.getElementById('fixture-diff-footer').focus({focusVisible:true});
+  const fileFocusStyle=getComputedStyle(document.getElementById('fixture-diff-footer'));
+  const fileFocusContained=fileFocusStyle.outlineStyle==='solid'&&parseFloat(fileFocusStyle.outlineOffset)+parseFloat(fileFocusStyle.outlineWidth)<=.6;
+  document.getElementById('fixture-diff-footer').dispatchEvent(new PointerEvent('pointerover',{bubbles:true,composed:true,pointerType:'mouse'}));
+  const rowHasSeparateSurface=document.getElementById('fixture-diff-footer').hasAttribute('data-spider-raised-row')&&getComputedStyle(document.getElementById('fixture-diff-footer'),'::before').pointerEvents==='none';
+  const independentScroll=document.createElement('div');workspace.append(independentScroll);independentScroll.dispatchEvent(new Event('scroll'));
+  const unrelatedScrollKeepsHover=document.getElementById('fixture-diff-footer').hasAttribute('data-spider-raised-active');
+  document.getElementById('fixture-diff-card').dispatchEvent(new Event('scroll'));
+  const ancestorScrollReleasesHover=!document.getElementById('fixture-diff-footer').hasAttribute('data-spider-raised-active');independentScroll.remove();
+  document.getElementById('activity-hit').dispatchEvent(new PointerEvent('pointerover',{bubbles:true,composed:true,pointerType:'mouse'}));
+  const activityHasOneSurface=document.getElementById('activity-surface').hasAttribute('data-spider-activity-surface')&&!document.getElementById('activity-surface').hasAttribute('data-spider-raised-row')&&!document.getElementById('activity-hit').hasAttribute('data-spider-raised-row');
+  const thinStatus=document.createElement('button');thinStatus.style='height:22px;width:160px;border:0;background:transparent';thinStatus.textContent='Changed files +27 -4';workspace.append(thinStatus);
+  thinStatus.dispatchEvent(new PointerEvent('pointerover',{bubbles:true,composed:true,pointerType:'mouse'}));
+  const thinStatusProportional=thinStatus.hasAttribute('data-spider-compact-hover')&&!thinStatus.hasAttribute('data-spider-raised-row');
+  thinStatus.remove();
+  const nativeStatus=document.createElement('div');nativeStatus.className='bg-surface-elevated-secondary rounded-3xl';nativeStatus.innerHTML='<button style="height:22px;width:160px;border:0;background:transparent">Changed files</button>';workspace.append(nativeStatus);await wait(100);
+  nativeStatus.firstElementChild.dispatchEvent(new PointerEvent('pointerover',{bubbles:true,composed:true,pointerType:'mouse'}));
+  const statusUsesNativeShell=nativeStatus.hasAttribute('data-spider-compact-surface')&&nativeStatus.firstElementChild.hasAttribute('data-spider-compact-hit')&&!nativeStatus.firstElementChild.hasAttribute('data-spider-compact-hover')&&!nativeStatus.firstElementChild.hasAttribute('data-spider-raised-row');
+  nativeStatus.remove();
+  const mediaBoundaryAligned=sentPicture.hasAttribute('data-spider-media-preview')&&getComputedStyle(sentPicture).overflow==='hidden'&&
+    parseFloat(getComputedStyle(sentPicture).borderTopLeftRadius)-parseFloat(getComputedStyle(sentPicture.firstElementChild).borderTopLeftRadius)===1&&getComputedStyle(sentPicture.firstElementChild).objectFit==='cover';
+  const paletteHidesConversation=usesFrostedArt(document.getElementById('command-palette'));
+  const compose=workspace.querySelector('[data-home-feed-composer]').getBoundingClientRect();
+  const attachment=document.createElement('div');
+  attachment.style.cssText=`position:fixed;left:${compose.left}px;top:${compose.top-155}px;width:${compose.width}px;height:140px`;
+  attachment.innerHTML='<button>文件和文件夹</button><button>计划模式</button><button>绘图</button>';
+  const addFiles=workspace.querySelector('button[aria-label="添加文件等内容"]');
+  addFiles.dataset.state='open';
+  workspace.append(attachment);
+  await wait(160);
+  const attachmentStyled=attachment.hasAttribute('data-spider-attachment-panel')&&usesFrostedArt(attachment)&&getComputedStyle(attachment).backgroundAttachment.includes('scroll');
+  const inspection=window.__SPIDER_CODEX_V3__.review();
+  const observedAttachment=inspection.attachmentOpened===1&&inspection.attachmentGlass===1&&inspection.clicks===0;
+  attachment.remove();
+  addFiles.dataset.state='closed';
+  const nativeAttachment=document.createElement('div');
+  nativeAttachment.style.cssText=`position:fixed;left:${compose.left}px;top:${compose.top-155}px;width:${compose.width}px;height:140px`;
+  nativeAttachment.innerHTML='<div data-composer-overlay-floating-ui><div class="suggestionMenu-fixture"><div data-mention-list-scroll-area><div data-mention-section-id="test"><div id="native-group-header">插件</div><div data-mention-section-items><button id="native-github" class="w-full" data-list-navigation-item style="width:230px;height:30px;opacity:.75"><span data-leading-icon-slot="menu"><img width="8" height="8" src="about:blank"></span><div data-menu-row-content><span class="truncate"><span>GitHub</span><span>Search repositories</span></span></div></button><button id="native-unavailable" data-list-navigation-item disabled style="height:30px;opacity:.4">Unavailable</button><button data-list-navigation-item><svg><style>.native-logo{fill:currentColor}</style></svg><div data-menu-row-content><span class="truncate">文件和文件夹</span></div></button><button data-list-navigation-item><span>计划模式</span><span>开启计划模式</span></button></div></div></div></div></div>';
+  document.body.append(nativeAttachment);addFiles.dataset.state='open';
+  await wait(30);
+  const nativeAttachmentPanel=nativeAttachment.querySelector('.suggestionMenu-fixture');
+  const nativeAttachmentStyled=nativeAttachmentPanel.hasAttribute('data-spider-attachment-panel')&&usesFrostedArt(nativeAttachmentPanel)&&nativeAttachmentPanel.hasAttribute('data-spider-glass-aligned');
+  const nativeAttachmentReport={githubOpacity:getComputedStyle(document.querySelector('#native-github')).opacity,githubMarker:document.querySelector('#native-github img').hasAttribute('data-spider-monochrome-icon'),disabledOpacity:getComputedStyle(document.querySelector('#native-unavailable')).opacity,headerBackdrop:getComputedStyle(document.querySelector('#native-group-header')).backdropFilter,headerImage:getComputedStyle(document.querySelector('#native-group-header')).backgroundImage.slice(0,150),headerAligned:document.querySelector('#native-group-header').hasAttribute('data-spider-glass-aligned')};
+  const nativeAttachmentDetails=Number(getComputedStyle(document.querySelector('#native-github')).opacity)===1&&
+    document.querySelector('#native-github img').hasAttribute('data-spider-monochrome-icon')&&
+    Number(getComputedStyle(document.querySelector('#native-unavailable')).opacity)===.4&&
+    usesFrostedArt(document.querySelector('#native-group-header'))&&document.querySelector('#native-group-header').hasAttribute('data-spider-glass-aligned');
+  let attachmentHover=true;
+  if(useActualPointer){
+    const row=document.getElementById('native-github'), disabled=document.getElementById('native-unavailable');
+    await hoverFixture(row,'attachment-enabled');
+    await wait(370);
+    const rowStyle=getComputedStyle(row);
+    const lit=row.matches(':hover')&&Number(rowStyle.getPropertyValue('--spider-attachment-light'))>.9&&
+      rowStyle.boxShadow!=='none'&&rowStyle.borderRadius==='8px'&&!reflectionLayer.hasAttribute('data-active');
+    await hoverFixture(disabled,'attachment-disabled');
+    await wait(280);
+    const disabledStyle=getComputedStyle(disabled);
+    attachmentHover=lit&&disabled.matches(':hover')&&Number(disabledStyle.getPropertyValue('--spider-attachment-light'))===0&&
+      disabledStyle.boxShadow==='none'&&!reflectionLayer.hasAttribute('data-active');
+  }
+  nativeAttachment.remove();addFiles.dataset.state='closed';
+  const newChatIcon=getComputedStyle(document.querySelector('#new-chat-icon'));
+  const nativeIconsAndAccent=newChatIcon.color==='rgb(255, 245, 238)'&&newChatIcon.opacity==='1'&&
+    getComputedStyle(document.querySelector('#send-action')).backgroundImage.includes('rgba(')&&
+    getComputedStyle(document.querySelector('#send-action')).backgroundColor==='rgba(0, 0, 0, 0)'&&
+    getComputedStyle(document.querySelector('#send-action')).boxShadow.includes('inset')&&
+    colors('permission-label').foreground==='rgb(255, 229, 188)';
+  workspace.insertAdjacentHTML('beforeend',`
+    <button id="custom-trigger" aria-haspopup="menu" aria-expanded="true" aria-controls="custom-popover">Add tools</button>
+    <section id="custom-popover" style="width:200px;padding:8px">
+      <div id="search-shell" role="search" style="background:#999"><input id="popup-search" type="search" placeholder="Search" style="background:white"></div>
+      <div id="slider-shell" role="group" style="background:#888;border:1px solid white"><input type="range"></div>
+      <div data-reasoning-slider role="menuitem" tabindex="0" data-highlighted style="background:#555;border:1px solid white;outline:2px solid white">
+        <div data-model-picker-power-slider data-keyboard-focused="true"><span style="background:#883333;border-radius:99px"><span role="slider" aria-valuemin="0" aria-valuemax="5" aria-valuenow="2"></span></span></div>
+      </div>
+    </section>`);
+  await wait(140);
+  const customPopup=document.getElementById('custom-popover');
+  const customTrigger=document.getElementById('custom-trigger');
+  customTrigger.setAttribute('aria-expanded','false');
+  await wait(90);
+  customTrigger.setAttribute('aria-expanded','true');
+  await wait(20);
+  const popupStyledPromptly=customPopup.hasAttribute('data-spider-popup-panel');
+  const rolelessPopupCovered=customPopup.hasAttribute('data-spider-popup-panel')&&
+    usesFrostedArt(customPopup);
+  const keyboardRow=customPopup.querySelector('[data-reasoning-slider]');
+  keyboardRow.focus();
+  const rowStyle=getComputedStyle(keyboardRow),thumb=keyboardRow.querySelector('[role="slider"]');
+  const sliderAppearance={background:rowStyle.backgroundColor,outline:rowStyle.outlineStyle,shadow:rowStyle.boxShadow,border:rowStyle.borderTopColor,thumb:getComputedStyle(thumb).outlineStyle,track:getComputedStyle(thumb.parentElement).backgroundColor};
+  const reasoningSlider=rowStyle.backgroundColor==='rgba(0, 0, 0, 0)'&&rowStyle.outlineStyle==='none'&&rowStyle.boxShadow==='none'&&rowStyle.borderTopColor==='rgba(0, 0, 0, 0)'&&getComputedStyle(thumb).outlineStyle==='solid'&&getComputedStyle(thumb.parentElement).backgroundColor==='rgb(136, 51, 51)';
+  const controlsBlend=reasoningSlider&&['search-shell','popup-search','slider-shell'].every(id=>colors(id).background==='rgba(0, 0, 0, 0)');
+  customTrigger.setAttribute('aria-expanded','false');
+  await wait(140);
+  const controlledPopupRestored=!customPopup.hasAttribute('data-spider-popup-panel');
+  customPopup.remove();customTrigger.remove();
+  readings.userMessage=contrast('user-text');
+  readings.menuLabel=contrast('popup-item');
+  readings.permissionLabel=contrast('permission-label');
+  const popupOpaque=usesFrostedArt(document.getElementById('composer-popup'))&&
+    getComputedStyle(document.getElementById('popup-item').firstElementChild).color==='rgb(255, 245, 238)';
+  // Open independently positioned submenu and confirmation layers as a portal would.
+  workspace.insertAdjacentHTML('beforeend',`
+    <div role="menu" id="nested-menu" hidden style="width:156px;max-height:40px;overflow:hidden">
+      <button role="menuitem" id="nested-choice" aria-checked="true" style="width:100%">
+        <span class="truncate" id="nested-label" style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">LongLocalizedSubmenuTitleWithNoSpaces</span>
+      </button>
+      <button role="menuitem" style="width:100%">Next option</button>
+    </div>
+    <div role="alertdialog" id="confirmation" hidden><button id="confirm-choice">Continue</button></div>`);
+  const popupItem=document.getElementById('popup-item');
+  const nestedMenu=document.getElementById('nested-menu');
+  const nestedChoice=document.getElementById('nested-choice');
+  const confirmation=document.getElementById('confirmation');
+  popupItem.addEventListener('click',()=>{nestedMenu.hidden=false;nestedChoice.focus();});
+  nestedChoice.addEventListener('click',()=>{confirmation.hidden=false;document.getElementById('confirm-choice').focus();});
+  popupItem.click();
+  const submenuFocus=document.activeElement===nestedChoice;
+  const nestedLabel=document.getElementById('nested-label');
+  const labelStyle=getComputedStyle(nestedLabel);
+  const narrowMenuMetrics={whiteSpace:labelStyle.whiteSpace,scrollWidth:nestedLabel.scrollWidth,clientWidth:nestedLabel.clientWidth,height:nestedLabel.offsetHeight,fontSize:parseFloat(labelStyle.fontSize),outlineOffset:getComputedStyle(nestedChoice).outlineOffset,overflow:getComputedStyle(nestedMenu).overflowY,scrollHeight:nestedMenu.scrollHeight,clientHeight:nestedMenu.clientHeight};
+  const narrowMenuReadable=labelStyle.whiteSpace==='normal'&&
+    nestedLabel.scrollWidth<=nestedLabel.clientWidth&&nestedLabel.offsetHeight>parseFloat(labelStyle.fontSize)*2&&
+    // Chromium snaps the inset to physical pixels at fractional display scales.
+    Math.abs(parseFloat(getComputedStyle(nestedChoice).outlineOffset)+2)<=1/devicePixelRatio&&
+    getComputedStyle(nestedMenu).overflowY==='auto'&&nestedMenu.scrollHeight>nestedMenu.clientHeight;
+  nestedChoice.click();
+  readings.nestedChoice=contrast('nested-choice');
+  readings.confirmChoice=contrast('confirm-choice');
+  const threeLevelsReadable=submenuFocus&&document.activeElement?.id==='confirm-choice'&&
+    [nestedMenu,confirmation].every(usesFrostedArt);
+  confirmation.hidden=true;nestedMenu.hidden=true;
+  // Native popovers may request transition:all. Position variables must never
+  // tween from a different wallpaper region on their first visible frame.
+  const openingAnchor=document.createElement('div');openingAnchor.style='position:fixed;left:200px;top:150px';
+  openingAnchor.innerHTML='<div role="menu" style="width:140px;height:50px;transition:all 120ms"><button role="menuitem">First frame</button></div>';
+  document.body.append(openingAnchor);
+  const openingPanel=openingAnchor.firstElementChild,openingFrames=[];
+  for(let frame=0;frame<3;frame++){
+    if(frame===1)openingAnchor.style.transform='translateX(38px)';
+    // MutationObserver runs ahead of this continuation in the same checkpoint,
+    // so this is stricter than waiting for an arbitrary timer after first paint.
+    await Promise.resolve();
+    const r=openingPanel.getBoundingClientRect(),s=getComputedStyle(openingPanel);
+    openingFrames.push({aligned:openingPanel.hasAttribute('data-spider-glass-aligned'),x:r.x,y:r.y,left:parseFloat(s.getPropertyValue('--spider-glass-left')),top:parseFloat(s.getPropertyValue('--spider-glass-top')),transition:s.transitionProperty});
+  }
+  const popupFirstPaintAligned=openingFrames.every(p=>p.aligned&&Math.abs(p.x-p.left)<.6&&Math.abs(p.y-p.top)<.6&&!/all|background|spider/.test(p.transition));
+  openingAnchor.remove();
+  const embedded=document.createElement('div');
+  embedded.setAttribute('role','dialog');
+  embedded.style.cssText='position:fixed;left:80px;top:60px;width:100px;height:85px';
+  embedded.innerHTML='<div data-radix-popper-content-wrapper style="position:fixed;left:16px;top:22px"><div role="menu"><button role="menuitem">Embedded submenu</button></div></div>';
+  root.append(embedded);
+  const embeddedMenu=embedded.querySelector('[role="menu"]');
+  await wait(125);
+  const actualAnchor=embeddedMenu.getBoundingClientRect();
+  const openAnchorStable=Math.abs(actualAnchor.left-16)<.6&&Math.abs(actualAnchor.top-22)<.6&&
+    usesFrostedArt(embedded)&&rgba(getComputedStyle(embedded).backgroundColor)[1]<.2&&usesFrostedArt(embeddedMenu)&&
+    embeddedMenu.hasAttribute('data-spider-glass-aligned')&&
+    Math.abs(parseFloat(embeddedMenu.style.getPropertyValue('--spider-glass-left'))-16)<.6;
+  embeddedMenu.parentElement.style.transform='translateX(38px)';
+  await wait(80);
+  const movingAnchorAligned=Math.abs(parseFloat(embeddedMenu.style.getPropertyValue('--spider-glass-left'))-54)<.6;
+  embeddedMenu.dataset.state='closed';
+  const embeddedAnchorStable=openAnchorStable&&movingAnchorAligned&&usesFrostedArt(embedded);
+  embedded.remove();
+  const railsFadeTogether=getComputedStyle(document.body,'::before').maskComposite.includes('intersect')&&
+    getComputedStyle(document.body,'::after').borderTopLeftRadius==='10px';
+  const workspaceStyled = workspace.hasAttribute('data-spider-home-main') &&
+    document.documentElement.getAttribute('data-spider-surface') === 'workspace';
+  const usageTrigger=document.createElement('button');usageTrigger.id='fixture-usage-trigger';usageTrigger.setAttribute('aria-label','Usage');aside.append(usageTrigger);
+  const usagePanel=document.createElement('div');usagePanel.setAttribute('role','menu');usagePanel.setAttribute('aria-labelledby',usageTrigger.id);
+  usagePanel.textContent='Remaining usage';document.body.append(usagePanel);await wait(80);
+  const usageBackedByArtwork=usagePanel.hasAttribute('data-spider-usage-popover')&&usagePanel.hasAttribute('data-spider-glass-aligned')&&
+    getComputedStyle(usagePanel).backgroundColor==='rgb(48, 34, 45)'&&getComputedStyle(usagePanel).backgroundImage.includes('blob:');
+  usagePanel.remove();usageTrigger.remove();
+  const recycledPanelClean=cleanAfterClassChange&&glassRestoredAfterReturning&&
+    !recycledPanel.hasAttribute('data-spider-glass-panel')&&
+    getComputedStyle(recycledPanel).backgroundColor==='rgb(255, 255, 255)'&&
+    getComputedStyle(recycledPanel).backdropFilter==='none';
+  const homeButton=aside.querySelector('[data-sidebar-destination="builtin:home"]');
+  homeButton.setAttribute('data-selected','');
+  const selectedGlass=getComputedStyle(homeButton,'::before').backdropFilter.includes('blur(8px)')&&
+    getComputedStyle(homeButton,'::before').backgroundImage.startsWith('linear-gradient');
+  homeButton.insertAdjacentHTML('beforeend','<svg width="14" height="14"><path d="M0 0h10v10H0z"></path></svg>');
+  const recycledIcon=homeButton.querySelector('svg');
+  await wait(180);
+  const hadHomeTreatment=recycledIcon.hasAttribute('data-spider-home-svg');
+  homeButton.dataset.sidebarDestination='builtin:workspace';
+  await wait(180);
+  const recycledIconVisible=hadHomeTreatment&&!recycledIcon.hasAttribute('data-spider-home-svg')&&getComputedStyle(recycledIcon).opacity==='1';
+  homeButton.dataset.sidebarDestination='builtin:home';
+  const navigation=getComputedStyle(aside.querySelector('.sidebar-navigation'));
+  const menuAppearance=getComputedStyle(document.getElementById('top-menu-item'));
+  const topMenuReadable=menuAppearance.color==='rgb(255, 245, 238)'&&
+    menuAppearance.backgroundImage==='none'&&menuAppearance.backdropFilter==='none';
+  const activityLabelsReadable=['activity-label','activity-duration','changed-file-label'].every(id=>{
+    const style=getComputedStyle(document.getElementById(id));
+    return style.color==='rgb(240, 222, 211)'&&style.backgroundColor==='rgba(0, 0, 0, 0)'&&style.textShadow!=='none';
+  })&&colors('added-count').foreground==='rgb(168, 237, 192)'&&colors('deleted-count').foreground==='rgb(255, 183, 173)'&&
+    getComputedStyle(document.getElementById('hidden-message-time')).opacity==='0';
+  const sidebarReadable=colors('sidebar-row').foreground==='rgb(255, 245, 238)'&&
+    colors('native-title').foreground==='rgb(255, 245, 238)'&&
+    getComputedStyle(document.getElementById('sidebar-mode').firstElementChild).color==='rgb(255, 245, 238)'&&
+    colors('sidebar-selected').foreground==='rgb(255, 245, 238)'&&
+    colors('sidebar-title').foreground==='rgb(255, 245, 238)'&&
+    colors('sidebar-disabled').foreground!==colors('sidebar-row').foreground&&
+    navigation.backgroundImage==='none'&&navigation.backgroundColor==='rgba(0, 0, 0, 0)'&&navigation.borderRightWidth==='0px'&&navigation.backdropFilter==='none';
+  function railAlignment(){
+    const main=getComputedStyle(document.documentElement);
+    const railArt=getComputedStyle(document.body,'::before');
+    const headerArt=getComputedStyle(document.body,'::after');
+    const nav=aside.querySelector('nav').getBoundingClientRect();
+    const entry={
+      railLeft:parseFloat(railArt.left),railTop:parseFloat(railArt.top),
+      railWidth:parseFloat(railArt.width),railHeight:parseFloat(railArt.height),
+      rootPosition:[parseFloat(main.backgroundPositionX),parseFloat(main.backgroundPositionY)],
+      railPosition:[parseFloat(railArt.backgroundPositionX),parseFloat(railArt.backgroundPositionY)],
+      railFilter:railArt.filter,headerFilter:headerArt.filter,
+      railBlur:railArt.backdropFilter,headerBlur:headerArt.backdropFilter
+    };
+    const near=(a,b)=>Math.abs(a-b)<0.12;
+    return {...entry,aligned:near(entry.railLeft,nav.left)&&near(entry.railTop,nav.top-5)&&
+      near(entry.railLeft+entry.railPosition[0],entry.rootPosition[0])&&
+      near(entry.railTop+entry.railPosition[1],entry.rootPosition[1])&&
+      railArt.backgroundSize===main.backgroundSize&&entry.railFilter===entry.headerFilter&&
+      entry.railFilter.includes('brightness(1.18)')&&entry.railBlur==='none'&&entry.headerBlur==='none'};
+  }
+  const geometryBefore=railAlignment();
+  const nav=aside.querySelector('nav');
+  nav.style.left='27px';
+  nav.style.top='93px';
+  nav.style.height='260px';
+  await wait(250);
+  const geometryAfter=railAlignment();
+  const geometryChanged=geometryBefore.aligned&&geometryAfter.aligned&&
+    geometryAfter.railTop>geometryBefore.railTop+20&&geometryAfter.railLeft>geometryBefore.railLeft+10;
+  const background=getComputedStyle(document.documentElement);
+  const artWidth=parseFloat(background.backgroundSize),x=parseFloat(background.backgroundPositionX);
+  const rightAligned=innerWidth-artWidth;
+  const faceInset=Math.min(172,Math.max(22,innerWidth*.12));
+  const faceLeft=x+artWidth*.332;
+  const expectedX=Math.min(0,Math.max(rightAligned,faceInset-artWidth*.332));
+  // innerWidth rounds to a CSS pixel, while computed positions keep fractions at fractional DPR.
+  const positionTolerance=.55;
+  const framing={width:innerWidth,height:innerHeight,deviceScale:devicePixelRatio,artWidth,faceLeft,rightAligned,x,
+    onlyShiftedWhenFaceWasClipped:Math.abs(expectedX-x)<positionTolerance&&x>=rightAligned-positionTolerance&&x<=positionTolerance};
+  const replyStyle=getComputedStyle(workspace.querySelector('article'));
+  const nestedComposerStyle=getComputedStyle(workspace.querySelector('.composer-surface-chrome'));
+  const composerBacking=getComputedStyle(workspace.querySelector('[class*="ComposerLayoutRoot-"]'));
+  const composerBlocksTranscript=composerBacking.backgroundColor==='rgb(48, 34, 45)'&&
+    composerBacking.backgroundImage.includes('blob:')&&composerBacking.backdropFilter==='none'&&
+    nestedComposerStyle.backgroundColor==='rgba(0, 0, 0, 0)';
+  const composerAndReply=usesFrostedArt(workspace.querySelector('[data-home-feed-composer]'))&&
+    nestedComposerStyle.backdropFilter==='none'&&
+    replyStyle.backgroundColor==='rgba(0, 0, 0, 0)'&&replyStyle.backdropFilter==='none';
+  let writes = 0;
+  const observer = new MutationObserver(records => writes += records.length);
+  observer.observe(root, {attributes: true, subtree: true,
+    attributeFilter: ['data-spider-home-main', 'data-spider-home-heading', 'data-spider-home-composer']});
+  const text = document.getElementById('stream').firstChild;
+  for (let i = 0; i !== 90; i++) {
+    text.data += '.';
+    await wait(8);
+  }
+  await wait(250);
+  observer.disconnect();
+  const transcript=document.createElement('section');
+  transcript.className='thread-scroll-container';
+  workspace.append(transcript);
+  await wait(190);
+  const scansBefore=window.__SPIDER_CODEX_V3__.review().surfaceRefreshes;
+  const plainReplies=document.createDocumentFragment();
+  for(let i=0;i<40;i++){
+    const reply=document.createElement('p');
+    reply.setAttribute('data-markdown-text-style','assistant-message');
+    reply.textContent='Virtualized plain reply '+i;
+    plainReplies.append(reply);
+  }
+  transcript.append(plainReplies);
+  await wait(190);
+  const plainRepliesSkipFullScan=window.__SPIDER_CODEX_V3__.review().surfaceRefreshes===scansBefore;
+  const activity=document.createElement('div');
+  activity.className='group/activity-header';
+  activity.innerHTML='<button class="absolute">Open activity</button>';
+  transcript.append(activity);
+  await wait(190);
+  const insertedActivityStillStyled=activity.hasAttribute('data-spider-activity-surface');
+  transcript.remove();
+  const loader=document.createElement('div');
+  loader.id='workspace-loading';
+  loader.style.backgroundColor='rgb(249,249,249)';
+  loader.innerHTML='<svg aria-label="Loading" viewBox="0 0 20 20"><circle cx="10" cy="10" r="5"/></svg>';
+  const loaderPortal=document.createElement('div');
+  root.replaceChildren(loaderPortal,loader);
+  await wait(250);
+  const loading=window.__SPIDER_CODEX_V3__.diagnose();
+  const workspaceLoadingBacked=loading.surface==='loading'&&!loading.active&&!loading.readyForHandoff&&
+    document.documentElement.getAttribute('data-spider-codex')==='loading'&&
+    getComputedStyle(document.documentElement).backgroundImage!=='none'&&
+    getComputedStyle(loader).backgroundColor==='rgba(0, 0, 0, 0)'&&
+    getComputedStyle(loader.querySelector('svg')).color==='rgb(255, 245, 238)';
+  loader.append(document.createElement('style'));
+  root.replaceWith(loader);
+  await wait(150);
+  const bareLoader=window.__SPIDER_CODEX_V3__.diagnose();
+  const bareLoadingBacked=bareLoader.surface==='loading'&&!bareLoader.readyForHandoff&&
+    getComputedStyle(loader).backgroundColor==='rgba(0, 0, 0, 0)'&&
+    getComputedStyle(document.documentElement).backgroundImage!=='none';
+  loader.replaceWith(root);
+  const previewFrame=document.createElement('iframe');
+  previewFrame.srcdoc='<div id="early-spinner" style="background:rgb(249,249,249)"><svg></svg><style></style></div>'+
+    '<script>('+addLoadingPreview.toString()+')();<\/script>';
+  await new Promise(resolve=>{previewFrame.addEventListener('load',resolve,{once:true});document.body.append(previewFrame)});
+  const previewWindow=previewFrame.contentWindow,previewDoc=previewWindow.document,earlySpinner=previewDoc.querySelector('#early-spinner');
+  const earlyPreviewBacked=previewWindow.getComputedStyle(previewDoc.documentElement).backgroundColor==='rgb(33, 23, 34)'&&
+    previewWindow.getComputedStyle(earlySpinner).backgroundColor==='rgba(0, 0, 0, 0)';
+  previewDoc.body.append(previewDoc.createElement('main'));
+  const earlyPreviewRespectsUnknownPage=previewWindow.getComputedStyle(earlySpinner).backgroundColor==='rgb(249, 249, 249)';
+  previewFrame.remove();
+  const unrecognized=document.createElement('main');
+  unrecognized.className='main-surface no-drag bg-surface';
+  unrecognized.innerHTML='<h1>Unrelated view</h1><textarea placeholder="Notes"></textarea><button>Sign in</button><button aria-label="Back to start">Back</button><div hidden class="rounded-2xl group/settings:section">Cached section</div><div id="native-unknown" class="bg-surface">Native panel</div>';
+  root.replaceChildren(aside,unrecognized);
+  await wait(250);
+  const state=window.__SPIDER_CODEX_V3__.diagnose();
+  const unknownUndisturbed=state.surface==='other'&&!state.active&&!state.readyForHandoff&&
+    state.reason==='unrecognized-native-surface'&&colors('native-unknown').background==='rgb(255, 255, 255)';
+  const profile=document.createElement('main');
+  profile.setAttribute('data-app-shell-main-surface','');
+  profile.className='bg-surface';
+  profile.innerHTML='<h1 id="fixture-profile-name" class="identityHeading-fixture text-token-text-primary">Fixture name</h1>';
+  root.replaceChildren(profile);
+  await wait(170);
+  const incompleteProfileUntouched=window.__SPIDER_CODEX_V3__.diagnose().surface==='other';
+  profile.insertAdjacentHTML('beforeend','<section id="fixture-profile-panel" class="group/profile-section"><h2 class="text-token-text-primary">Profile settings</h2><input id="fixture-profile-field" aria-label="Display name"></section>');
+  await wait(170);
+  const profileState=window.__SPIDER_CODEX_V3__.diagnose();
+  const knownProfileStyled=profileState.surface==='profile'&&profileState.active&&profileState.readyForHandoff&&
+    profile.hasAttribute('data-spider-settings')&&usesFrostedArt(document.getElementById('fixture-profile-panel'))&&
+    colors('fixture-profile-name').foreground==='rgb(255, 245, 238)'&&colors('fixture-profile-field').foreground==='rgb(255, 245, 238)';
+  const picker=document.createElement('section');
+  picker.innerHTML='<h1>Choose your workspace</h1><button id="workspace-choice" class="bg-surface text-secondary">Personal</button><button>Team</button>';
+  root.replaceChildren(picker);
+  await wait(250);
+  const pickerState=window.__SPIDER_CODEX_V3__.diagnose();
+  const pickerRecovered=pickerState.surface==='workspace-picker'&&pickerState.active&&pickerState.readyForHandoff;
+  readings.workspaceChoice=contrast('workspace-choice');
+  root.replaceChildren(aside,workspace);
+  await wait(250);
+  const workspaceRecovered=window.__SPIDER_CODEX_V3__.diagnose().surface==='workspace'&&
+    workspace.hasAttribute('data-spider-home-main');
+  // A recently added feature can introduce these controls after theme setup.
+  const newFeature=document.createElement('div');
+  newFeature.setAttribute('role','menu');
+  newFeature.style='position:fixed;left:72px;top:110px;z-index:1000;width:220px;padding:6px';
+  newFeature.innerHTML=`<button aria-haspopup="listbox" aria-controls="new-feature-list" style="width:100%;height:32px">Options</button>
+    <button role="menuitem" data-disabled style="width:100%;height:32px">Unavailable</button>
+    <button role="switch" data-list-navigation-item aria-checked="true" style="width:42px;height:24px">On</button>
+    <button class="rounded-full" aria-haspopup="menu" style="width:28px;height:28px;border-radius:50%">…</button>`;
+  workspace.append(newFeature);
+  const [newFeatureTrigger,newFeatureDisabled,newFeatureSwitch,newFeatureIcon]=newFeature.children;
+  const newFeatureList=document.createElement('div');
+  newFeatureList.id='new-feature-list';newFeatureList.setAttribute('role','listbox');
+  newFeatureList.style='position:fixed;left:300px;top:114px;z-index:1001;width:150px';
+  newFeatureList.innerHTML='<button role="option" aria-selected="true" style="width:100%;height:30px">Automatic</button>';
+  let nativeActivations=0;
+  newFeatureTrigger.addEventListener('click',()=>{
+    nativeActivations++;
+    newFeatureTrigger.setAttribute('aria-expanded','true');
+    workspace.append(newFeatureList);
+  });
+  await wait(120);
+  newFeatureTrigger.focus({focusVisible:true});
+  const featureTokens=getComputedStyle(document.documentElement);
+  const featureControlRadius=featureTokens.getPropertyValue('--spider-radius-control').trim();
+  const featureCardRadius=featureTokens.getPropertyValue('--spider-radius-card').trim();
+  const featureTriggerStyle=getComputedStyle(newFeatureTrigger);
+  const featureFocusContained=featureTriggerStyle.outlineStyle==='solid'&&parseFloat(featureTriggerStyle.outlineOffset)<0;
+  const featureBoundaryAligned=getComputedStyle(newFeature).borderRadius===featureCardRadius&&
+    featureTriggerStyle.borderRadius===featureControlRadius&&getComputedStyle(newFeatureSwitch).borderRadius==='999px'&&
+    getComputedStyle(newFeatureIcon).borderRadius==='50%';
+  let featureLightAligned=null,featureDisabledInert=null;
+  if(useActualPointer){
+    await hoverFixture(newFeatureTrigger,'enabled');
+    await wait(100);
+    featureLightAligned=newFeatureTrigger.matches(':hover')&&reflectionLayer.hasAttribute('data-active')&&
+      reflectionLayer.style.borderRadius===featureControlRadius&&reflectionLayer.style.clipPath.includes('round '+featureCardRadius)&&
+      getComputedStyle(reflectionLayer).pointerEvents==='none'&&getComputedStyle(newFeatureTrigger).outlineStyle==='solid';
+    await hoverFixture(newFeatureDisabled,'disabled');
+    await wait(60);
+    featureDisabledInert=newFeatureDisabled.matches(':hover')&&newFeatureDisabled.hasAttribute('data-disabled')&&
+      !reflectionLayer.hasAttribute('data-active');
+    delete window.fixturePointerStep;
+    delete window.finishFixturePointerStep;
+  }
+  newFeatureTrigger.click();
+  await wait(120);
+  const featureSubmenuAligned=nativeActivations===1&&newFeatureList.hasAttribute('data-spider-glass-aligned')&&
+    getComputedStyle(newFeatureList).borderRadius===featureCardRadius&&getComputedStyle(newFeatureList.firstElementChild).borderRadius===featureControlRadius;
+  const newFeatureStandard={boundaryAligned:featureBoundaryAligned,focusContained:featureFocusContained,
+    clippedHighlight:featureLightAligned,disabledInert:featureDisabledInert,nativeSubmenuAligned:featureSubmenuAligned};
+  newFeature.remove();newFeatureList.remove();
+  const originalApi=window.__SPIDER_CODEX_V3__;
+  const originalImage=originalApi.wallpaperUrl;
+  const originalFrost=document.documentElement.style.getPropertyValue('--spider-frosted-art');
+  const originalClear=document.documentElement.style.getPropertyValue('--spider-clear-art');
+  const originalTextureUrls=[originalApi.artworkCache.frostUrl,originalApi.artworkCache.clearUrl];
+  const upgrade=await import('./theme-fixture-module.mjs?upgrade=1');
+  upgrade.default({wallpaper:wallpaperSource});
+  originalApi.remove();
+  const artworkReused=window.__SPIDER_CODEX_V3__?.version===theme.version+1&&
+    window.__SPIDER_CODEX_V3__.wallpaperUrl===originalImage&&
+    document.documentElement.style.getPropertyValue('--spider-frosted-art')===originalFrost&&
+    document.documentElement.style.getPropertyValue('--spider-clear-art')===originalClear&&
+    await fetch(originalImage).then(r=>r.ok,()=>false)&&
+    (await Promise.all(originalTextureUrls.map(url=>fetch(url).then(r=>r.ok,()=>false)))).every(Boolean);
+  const beforeEdit=window.__SPIDER_CODEX_V3__,sameVersionEdit=await import('./theme-fixture-module.mjs?upgrade=1&edit=1');
+  sameVersionEdit.default({wallpaper:wallpaperSource});
+  const sameVersionHotUpdate=window.__SPIDER_CODEX_V3__!==beforeEdit&&window.__SPIDER_CODEX_V3__.version===beforeEdit.version&&
+    window.__SPIDER_CODEX_V3__.stylesheetRevision!==beforeEdit.stylesheetRevision&&window.__SPIDER_CODEX_V3__.wallpaperUrl===originalImage&&document.querySelectorAll('[data-spider-hover-light]').length===1;
+  artContext.fillStyle='#883344';artContext.fillRect(0,0,8,8);
+  const replacementSource=art.toDataURL();
+  upgrade.default({wallpaper:replacementSource});
+  const replacementImage=window.__SPIDER_CODEX_V3__.wallpaperUrl;
+  const artworkChanged=replacementImage!==originalImage&&window.__SPIDER_CODEX_V3__.artworkCache.source===replacementSource&&
+    await fetch(originalImage).then(()=>false,()=>true)&&
+    (await Promise.all(originalTextureUrls.map(url=>fetch(url).then(()=>false,()=>true)))).every(Boolean);
+  const tokenCases=[
+    ['secondary-solid','--color-text-secondary-solid','--color-background-secondary-solid'],
+    ['selected-tab','--color-text','--color-surface-secondary'],
+    ['primary-solid','--color-text-primary-solid','--color-background-primary-solid'],
+    ['neutral-solid','--color-text-neutral-solid','--color-background-neutral-solid'],
+    ['accent-solid','--color-text-accent-solid','--color-background-accent-solid'],
+    ['native-secondary','--app-color-text-button-secondary','--app-color-background-control'],
+    ['native-tertiary','--app-color-text-button-tertiary','--app-color-background-elevated-secondary'],
+    ['dropdown','--color-token-dropdown-foreground','--color-token-dropdown-background'],
+    ['description','--color-token-description-foreground','--app-color-background-control'],
+    ['tooltip','--color-text-tooltip-classic','--color-background-tooltip-classic'],
+    ['application-menu','--app-color-foreground-application-menu','--app-color-background-application-menu'],
+    ['primary-icon','--app-color-icon-primary','--app-color-background-control'],
+    ['tertiary-icon','--app-color-icon-tertiary','--app-color-background-control']
+  ];
+  for(const status of ['danger','warning','caution','success','info','discovery']){
+    tokenCases.push([status+'-solid','--color-text-'+status+'-solid','--color-background-'+status+'-solid']);
+    tokenCases.push([status+'-soft','--color-text-'+status+'-soft','--color-background-'+status+'-soft']);
+    tokenCases.push([status+'-outline','--color-text-'+status+'-outline','--app-color-background-control']);
+  }
+  const tokenHost=document.createElement('section');
+  tokenHost.style.cssText='background:#241e27;padding:8px';
+  workspace.append(tokenHost);
+  const nativeControlPairs=tokenCases.map(([id,foreground,background])=>{
+    const node=document.createElement('button');node.id='native-token-'+id;node.textContent='Action';
+    node.style.cssText=`color:var(${foreground});background:var(${background})`;
+    tokenHost.append(node);
+    return {id,contrast:contrast(node.id)};
+  });
+  const disabledControl=document.createElement('button');disabledControl.disabled=true;
+  disabledControl.style.cssText='opacity:.4;color:var(--color-text-disabled)';
+  tokenHost.append(disabledControl);
+  const disabledTokenPreserved=disabledControl.disabled&&Number(getComputedStyle(disabledControl).opacity)===.4;
+  const nativeControlPairsReadable=nativeControlPairs.every(pair=>pair.contrast>=4.5);
+  tokenHost.remove();
+  const originalBounds=Element.prototype.getBoundingClientRect;
+  let diagnosticLayoutReads=0;
+  Element.prototype.getBoundingClientRect=function(){diagnosticLayoutReads++;return originalBounds.call(this)};
+  try{for(let i=0;i<100;i++)window.__SPIDER_CODEX_V3__.diagnose();}
+  finally{Element.prototype.getBoundingClientRect=originalBounds;}
+  const finalTextureUrls=['frostUrl','clearUrl'].map(key=>window.__SPIDER_CODEX_V3__.artworkCache[key]).filter(Boolean);
+  window.__SPIDER_CODEX_V3__.remove();
+  const artworkReleased=await fetch(replacementImage).then(()=>false,()=>true)&&
+    (await Promise.all(finalTextureUrls.map(url=>fetch(url).then(()=>false,()=>true)))).every(Boolean)&&
+    !document.querySelector('[data-spider-hover-light],[data-spider-hover-water]');
+  root.replaceChildren(settings);
+  const restored = colors('dialog').background === 'rgb(255, 255, 255)' &&
+    !document.documentElement.hasAttribute('data-spider-codex')&&
+    !document.documentElement.style.getPropertyValue('--spider-rail-top');
+  const codeRestored=!codeShadow.getElementById('spider-code-surface')&&!codeHost.hasAttribute('data-spider-code-surface')&&getComputedStyle(codeToken).color==='rgb(13, 13, 13)';
+  const resizeCases=await resizeWorkspace();
+  send({kind: 'surfaceFixture', themeVersion: theme.version, authStyled, settingsContinuous,languageListContained,
+    popoversReadable, usageBackedByArtwork, roleTagReleased, workspaceStyled, plainRepliesSkipFullScan, insertedActivityStillStyled, workspaceLoadingBacked, bareLoadingBacked, earlyPreviewBacked, earlyPreviewRespectsUnknownPage, unknownUndisturbed, incompleteProfileUntouched, knownProfileStyled, pickerRecovered, workspaceRecovered, newFeatureStandard, restored, floating,integratedSettingsStyled,externalSettingsHostSafe,portalSettingsRecognized,narrowMenuMetrics,colorPickerPreserved,quotaPresentation:!!quotaPresentation,codePresentation,lazyCodeTokenReadable,codeRestored,dockSendGlass,composerBlocksTranscript,reducedMotionKeepsOrientation,
+    geometryBefore,geometryAfter,geometryChanged,framing,composerAndReply,readings,selectedVisible,fieldBoundary,focus,focusVisible,disabledStillDisabled,sidebarReadable,topMenuReadable,popupOpaque,railsFadeTogether,threeLevelsReadable,
+    homeAttributeWritesDuring90TextUpdates: writes, liveAuthenticatedSettingsTest: false, resizeCases, embeddedAnchorStable, activityLabelsReadable, settingsChildStyled, narrowMenuReadable,recycledPanelClean,authActionRestyled,recycledIconVisible,
+    artworkChanged,artworkReused,artworkReleased,sameVersionHotUpdate,preparedTexturesShort,primaryStatesUnified,primaryDisabledDistinct,popupFirstPaintAligned,reflectionNonInteractive,compactControlComfortable,switchShapeAligned,fileCardCornersAligned,fileFocusContained,standalonePopupNotFlattened,miniPreviewIntegrated,pluginLogoPreservesColor,rowHasSeparateSurface,unrelatedScrollKeepsHover,ancestorScrollReleasesHover,activityHasOneSurface,thinStatusProportional,statusUsesNativeShell,mediaBoundaryAligned,openingFrames,nativeAttachmentReport,nativeAttachmentDetails,nativeAttachmentStyled,attachmentHover,popupStyledPromptly,searchAppearance,sliderAppearance,rolelessPopupCovered,controlsBlend,controlledPopupRestored,selectedGlass,languageBlend,searchIntegrated,generalIconReadable,diffControlsVisible,paletteHidesConversation,diagnosticLayoutReads,attachmentStyled,nativeIconsAndAccent,observedAttachment,nativeControlPairs,nativeControlPairsReadable,disabledTokenPreserved,
+    passed: authStyled && settingsContinuous && languageListContained && popoversReadable && usageBackedByArtwork && roleTagReleased && workspaceStyled && integratedSettingsStyled && externalSettingsHostSafe && portalSettingsRecognized && colorPickerPreserved && quotaPresentation && codePresentation && lazyCodeTokenReadable && codeRestored && dockSendGlass && composerBlocksTranscript && reducedMotionKeepsOrientation &&
+      plainRepliesSkipFullScan && insertedActivityStillStyled && workspaceLoadingBacked && bareLoadingBacked && earlyPreviewBacked && earlyPreviewRespectsUnknownPage && unknownUndisturbed && incompleteProfileUntouched && knownProfileStyled && pickerRecovered && workspaceRecovered && Object.values(newFeatureStandard).every(result=>result!==false) && restored && geometryChanged &&
+      framing.onlyShiftedWhenFaceWasClipped && composerAndReply && selectedVisible && fieldBoundary && focusTreatmentExpected && disabledStillDisabled && sidebarReadable && topMenuReadable && popupOpaque && railsFadeTogether && threeLevelsReadable &&
+      Object.entries(readings).every(([name,value])=>value>=(name==='attachmentIcon'?3:4.5)) && writes === 0 && resizeCases.every(item=>item.passed) && embeddedAnchorStable && activityLabelsReadable && settingsChildStyled && narrowMenuReadable && recycledPanelClean && authActionRestyled && recycledIconVisible &&
+      artworkChanged && artworkReused && artworkReleased && sameVersionHotUpdate && preparedTexturesShort && primaryStatesUnified && primaryDisabledDistinct && popupFirstPaintAligned && reflectionNonInteractive && compactControlComfortable && switchShapeAligned && fileCardCornersAligned && fileFocusContained && standalonePopupNotFlattened && miniPreviewIntegrated && pluginLogoPreservesColor && rowHasSeparateSurface && unrelatedScrollKeepsHover && ancestorScrollReleasesHover && activityHasOneSurface && thinStatusProportional && statusUsesNativeShell && mediaBoundaryAligned && nativeAttachmentDetails && nativeAttachmentStyled && attachmentHover && popupStyledPromptly && rolelessPopupCovered && controlsBlend && controlledPopupRestored && selectedGlass && languageBlend && searchIntegrated && generalIconReadable && diffControlsVisible && paletteHidesConversation && diagnosticLayoutReads===0 && attachmentStyled && nativeIconsAndAccent && observedAttachment && nativeControlPairsReadable && disabledTokenPreserved});
+} catch (error) {
+  send({kind: 'error', error: String(error)});
+}
+</script>
+</html>

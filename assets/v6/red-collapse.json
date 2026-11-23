@@ -1,0 +1,38 @@
+{
+  "sourceReference": [
+    45.4666666667,
+    46.7
+  ],
+  "frames": 74,
+  "fps": 60,
+  "referenceRecordingFps": 60,
+  "originalEffectEngineFps": null,
+  "videoSize": [
+    2180,
+    1404
+  ],
+  "box": [
+    488.0,
+    10.0,
+    1090.0,
+    702.0
+  ],
+  "referenceSize": [
+    1920,
+    1080
+  ],
+  "colorRGB": [
+    190,
+    6,
+    35
+  ],
+  "normalAlpha": true,
+  "colorMode": "rgb-video",
+  "colorVideo": "v6/red-color.mp4",
+  "colorVideoSize": [
+    546,
+    352
+  ],
+  "method": "Local clean-background phase alignment and chroma-aware alpha correction. Supported silk crossings are limited by adjacent strand opacity.",
+  "status": "local-preview"
+}
