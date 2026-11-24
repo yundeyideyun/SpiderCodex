@@ -17,6 +17,8 @@ class DailyLauncher {
     static HashSet<int> owned=new HashSet<int>();
     static bool launchOwned=false,animationMuted=false;
     static bool fullEffects;
+    static bool adaptiveTheme;
+    static string officialVersion,layoutRepair;
     static bool restartRequested=false;
     static IntPtr cachedWindow=IntPtr.Zero;
     static uint cachedWindowPid=0;
@@ -98,11 +100,11 @@ class DailyLauncher {
             }
             return true;
         },IntPtr.Zero);
-        if(found!=IntPtr.Zero){if(!Native.SetProp(found,WindowProperty,windowToken))throw new Exception("无法标记真实客户端主窗口。");cachedWindow=found;Native.GetWindowThreadProcessId(found,out cachedWindowPid);if(sessionShown)Spider.Write("session"+suffix+".json",new{status="visible",pid=Process.GetCurrentProcess().Id,window=found.ToInt64(),port=port,owned=launchOwned});}return found;
+        if(found!=IntPtr.Zero){if(!Native.SetProp(found,WindowProperty,windowToken))throw new Exception("无法标记真实客户端主窗口。");cachedWindow=found;Native.GetWindowThreadProcessId(found,out cachedWindowPid);if(sessionShown)Spider.Write("session"+suffix+".json",new{status="visible",pid=Process.GetCurrentProcess().Id,window=found.ToInt64(),port=port,owned=launchOwned,adaptiveTheme});}return found;
     }
-    static void StartThemeKeeper(){if(themeKeeper!=null&&!themeKeeper.HasExited)return;if(!OwnsConnection())return;if(themeKeeper!=null){themeKeeper.Dispose();themeKeeper=null;}var info=new ProcessStartInfo(node,Spider.Quote(Path.Combine(Spider.Root,"runtime","theme-keeper.mjs"))+" --port "+port+" --owner "+Process.GetCurrentProcess().Id+" --suffix "+Spider.Quote(suffix)){UseShellExecute=false,CreateNoWindow=true,WorkingDirectory=Spider.Root};RuntimeDependencies.IsolateProfile(info,profile);themeKeeper=Process.Start(info);}
+    static void StartThemeKeeper(){if(adaptiveTheme||themeKeeper!=null&&!themeKeeper.HasExited)return;if(!OwnsConnection())return;if(themeKeeper!=null){themeKeeper.Dispose();themeKeeper=null;}var info=new ProcessStartInfo(node,Spider.Quote(Path.Combine(Spider.Root,"runtime","theme-keeper.mjs"))+" --port "+port+" --owner "+Process.GetCurrentProcess().Id+" --suffix "+Spider.Quote(suffix)){UseShellExecute=false,CreateNoWindow=true,WorkingDirectory=Spider.Root};RuntimeDependencies.IsolateProfile(info,profile);SetLayoutEnvironment(info);themeKeeper=Process.Start(info);}
     static void StartResizeCompanion(){
-        if(resizeCompanion!=null&&!resizeCompanion.HasExited)return;
+        if(adaptiveTheme||resizeCompanion!=null&&!resizeCompanion.HasExited)return;
         if(resizeCompanion!=null){resizeCompanion.Dispose();resizeCompanion=null;}
         try{resizeCompanion=Spider.Start(System.IO.Path.Combine(Spider.Root,"ResizeCompanion.exe"),"--owner "+Process.GetCurrentProcess().Id+" --suffix "+Spider.Quote(suffix));}
         catch(Exception e){Spider.Log("resize-preview",e.Message);}
@@ -151,13 +153,20 @@ class DailyLauncher {
         } catch {}
         return false;
     }
+    static void SetLayoutEnvironment(ProcessStartInfo info){
+        info.EnvironmentVariables["SPIDERCODEX_OFFICIAL_VERSION"]=officialVersion??"";
+        info.EnvironmentVariables["SPIDERCODEX_LAYOUT_REPAIR"]=layoutRepair??"";
+        info.EnvironmentVariables["SPIDERCODEX_REPAIR_OBSERVATION"]=profile==""?"1":"0";
+    }
     static bool Connect(bool restore,bool activate=false,bool health=false) {
         lastConnectionReason=null;
         if(!OwnsConnection())return false;
-        var info=new ProcessStartInfo(node,Spider.Quote(Path.Combine(Spider.Root,"runtime","connect.mjs"))+" --port "+port+(restore?" --restore":activate?" --activate":health?" --health":" --no-boot")) {
+        string operation=restore?(adaptiveTheme?" --restore-style-only":" --restore"):activate?" --activate":health?" --health":" --no-boot";
+        var info=new ProcessStartInfo(node,Spider.Quote(Path.Combine(Spider.Root,"runtime","connect.mjs"))+" --port "+port+operation+(adaptiveTheme?" --adaptive":"")) {
             UseShellExecute=false,CreateNoWindow=true,WorkingDirectory=Spider.Root,RedirectStandardOutput=true,RedirectStandardError=true
         };
         RuntimeDependencies.IsolateProfile(info,profile);
+        SetLayoutEnvironment(info);
         using(var p=Process.Start(info)) {
             string output="",error="";
             p.OutputDataReceived+=delegate(object s,DataReceivedEventArgs e){if(e.Data!=null)output+=e.Data+Environment.NewLine;};
@@ -223,6 +232,7 @@ class DailyLauncher {
         Spider.Log("launch",activated?"Returned to the themed window after sign-in.":"Windows kept the other official window in front; indicated the themed window on the taskbar.");
     }
     static bool ReopenBoundWindow(){
+        if(adaptiveTheme)return Reveal();
         if(!Ready()||!Connect(false,true))return false;
         for(int i=0;i<10;i++){
             var w=Window();
@@ -249,15 +259,22 @@ class DailyLauncher {
         }
         return info;
     }
-    static int OpenNativeWindow(HashSet<int> ids) {
+    static int OpenNativeWindow(HashSet<int> ids,InstalledClient registered=null) {
+        int existingWindowOwner=0;
         foreach(int id in ids)using(var process=SafeProcess(id)){
             if(process==null||!Client(process))continue;
             IntPtr h=process.MainWindowHandle;
             if(h==IntPtr.Zero||Native.Class(h)!="Chrome_WidgetWin_1")continue;
             if(Native.IsIconic(h))Native.ShowWindow(h,9);
-            Native.SetForegroundWindow(h);
-            return id;
+            if(Native.GetForegroundWindow()==h||Native.SetForegroundWindow(h)||registered==null)return id;
+            existingWindowOwner=id;
+            break;
         }
+        if(registered!=null&&!string.IsNullOrEmpty(registered.NativeAppId)){
+            try { return registered.ActivateNative(); }
+            catch(Exception error){Spider.Log("launch","Could not activate the existing official window through Windows: "+error.Message);}
+        }
+        if(existingWindowOwner!=0)return existingWindowOwner;
         // An official process with no top-level window can handle its normal
         // activation request through the same registered executable.
         using(var started=Process.Start(OfficialStart("",false)))return started==null?0:started.Id;
@@ -271,8 +288,26 @@ class DailyLauncher {
         Spider.Write("compatibility.json",new{officialVersion=target.Version,mode="native-only",reason=target.CompatibilityReason,
             nativeEntryAvailable=target.NativeAppId!=null,nativeActivationConfirmed=false});
         int pid=target.ActivateNative();
+        Spider.Write("session.json",new{status="official-update",officialVersion=target.Version,clientPid=pid,
+            wallpaperRequested=fullEffects,wallpaperStatus=fullEffects?"starting":"disabled",clientTerminated=false});
+        string wallpaperStatus="disabled";
+        if(fullEffects){
+            try{LaunchWallpaper();wallpaperStatus="ready";}
+            catch(Exception error){
+                wallpaperStatus="unavailable";
+                Spider.Log("wallpaper","Could not start wallpaper on native fallback: "+error.Message);
+            }
+        }
         Spider.Write("compatibility.json",new{officialVersion=target.Version,mode="native-only",reason=target.CompatibilityReason,
-            nativeEntryAvailable=true,nativeActivationConfirmed=pid>0});
+            nativeEntryAvailable=true,nativeActivationConfirmed=pid>0,wallpaperStatus});
+        Spider.Write("session.json",new{status="official-update",officialVersion=target.Version,clientPid=pid,
+            wallpaperRequested=fullEffects,wallpaperStatus,clientTerminated=false});
+    }
+    static void AdaptiveFallback(InstalledClient target,string detail)
+    {
+        Spider.Log("launch","Adaptive theme left the official renderer unchanged: "+detail);
+        if(profile=="")FallbackForUnreviewedClient(target);
+        else Spider.Write("session"+suffix+".json",new{status="adaptive-native",pid=Process.GetCurrentProcess().Id,port,clientTerminated=false});
     }
     static void AdoptCurrent() {
         if(!Ready())throw new Exception("没有可接入的本机客户端连接；未结束任何客户端。");
@@ -344,8 +379,10 @@ class DailyLauncher {
                     if(!process.WaitForExit(8000))throw new Exception("旧版壁纸未能正常退出；没有强制结束进程，请稍后重试。");
                 }catch(System.ComponentModel.Win32Exception){throw new Exception("无法确认现有壁纸进程归属；未启动第二套壁纸。");}
             }
-            if(!compatible)started.Reset();
-            Spider.Start(Path.Combine(Spider.Root,"DesktopWallpaper.exe"),"").Dispose();
+            if(!compatible){
+                started.Reset();
+                Spider.Start(Path.Combine(Spider.Root,"DesktopWallpaper.exe"),"").Dispose();
+            }
             if(!started.WaitOne(12000))throw new Exception("动态壁纸未能挂到桌面，请查看壁纸运行记录。");
             var state=Spider.Read("wallpaper.json");object id;int wallpaperId;if(!state.TryGetValue("pid",out id)||!int.TryParse(Convert.ToString(id),out wallpaperId))throw new Exception("壁纸就绪记录缺失。");
             using(var process=Process.GetProcessById(wallpaperId))if(!string.Equals(process.MainModule.FileName,Path.Combine(Spider.Root,"DesktopWallpaper.exe"),StringComparison.OrdinalIgnoreCase)||FileVersionInfo.GetVersionInfo(process.MainModule.FileName).ProductVersion!=Spider.Version)throw new Exception("壁纸就绪记录与当前版本不一致；未开始客户端开场。");
@@ -354,6 +391,11 @@ class DailyLauncher {
     static void MainCore(string[] args) {
         var entryPoint=Cursor.Position;
         Spider.Init();
+        if(args.Length==0){
+            string installation=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Programs","SpiderCodex");
+            string installedEntry=ReleasePointer.InstalledEntryForPayload(Spider.Root,installation);
+            if(installedEntry!=null){using(var child=ReleasePointer.Start(installedEntry,args)){}return;}
+        }
         if(Array.IndexOf(args,"--diagnose")>=0){Diagnostics.Run();return;}
         alias=Spider.Arg(args,"--client",null);
         node=Spider.Arg(args,"--node",null); profile=Spider.Arg(args,"--profile","");
@@ -380,7 +422,10 @@ class DailyLauncher {
             return;
         }
         if(Array.IndexOf(args,"--probe-launch-target")>=0){Spider.Write("launch-target.json",target.Describe());return;}
-        if(!target.ThemeCompatible){
+        officialVersion=target.Version;
+        layoutRepair=profile==""?CompatibilityRepair.CurrentPreset(Spider.State,officialVersion):null;
+        adaptiveTheme=!target.ThemeCompatible&&target.CanTryAdaptiveTheme;
+        if(!target.ThemeCompatible&&!adaptiveTheme){
             try{
                 if(profile!=""||Array.IndexOf(args,"--adopt-current")>=0||Array.IndexOf(args,"--restore")>=0||Array.IndexOf(args,"--probe-connection")>=0)
                     throw new InvalidOperationException("当前官方客户端版本或启动入口需要兼容性复核。请从 Windows 开始菜单打开官方客户端。");
@@ -396,7 +441,7 @@ class DailyLauncher {
         if(alias!=null&&!String.Equals(Path.GetFullPath(alias),target.Executable,StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("指定的入口和当前已验证的官方客户端不一致。请移除 --client 覆盖项。");
         alias=target.Executable;
-        if(!explicitPort)DiscoverRunningConnection();
+        if(!explicitPort&&!adaptiveTheme)DiscoverRunningConnection();
         if(Array.IndexOf(args,"--probe-connection")>=0){
             bool reused=Ready();
             if(port==0)port=Native.FindFreeLoopbackPort();
@@ -411,7 +456,14 @@ class DailyLauncher {
         }
         bool owner;
         using(var mutex=new Mutex(true,EventName("DailyClient"),out owner)) {
-            if(!owner) {try{using(var e=EventWaitHandle.OpenExisting(EventName("BringToFront")))e.Set();}catch{}return;}
+            if(!owner) {
+                try{using(var e=EventWaitHandle.OpenExisting(EventName("BringToFront")))e.Set();}catch{}
+                if(profile=="")try{
+                    if(fullEffects)LaunchWallpaper();
+                    else StopWallpaperForLightExperience();
+                }catch(Exception error){Spider.Log("launch","Could not update desktop wallpaper on reopen: "+error.Message);}
+                return;
+            }
             if(!fullEffects)StopWallpaperForLightExperience();
             var previousSession=Spider.Read("session"+suffix+".json");object previousOwner;
             if(previousSession.TryGetValue("pid",out previousOwner)){int previousId;if(int.TryParse(Convert.ToString(previousOwner),out previousId)&&previousId>0)Native.RestoreStartupOpacity(previousId);}
@@ -431,8 +483,11 @@ class DailyLauncher {
                     var running=ClientIds();
                     if(running.Count>0){
                         if(profile!="")throw new Exception("独立客户端已运行，但没有可核验的主题连接。");
-                        OpenNativeWindow(running);
-                        Spider.Write("session.json",new{status="native-existing",clientTerminated=false});
+                        int clientId=OpenNativeWindow(running,target);
+                        Spider.Write("session.json",new{status="native-existing",clientPid=clientId,clientTerminated=false});
+                        Spider.Log("launch","The official client was already running without a theme connection; existing session preserved.");
+                        try{LaunchSessionWallpaper();}
+                        catch(Exception error){Spider.Log("wallpaper","Could not start wallpaper while reusing the official client: "+error.Message);}
                         return;
                     }
                 }
@@ -444,7 +499,8 @@ class DailyLauncher {
                     return;
                 }
                 bool animated=false;
-                if(!fullEffects||Array.IndexOf(args,"--skip-intro")>=0)SkipIntro(cancel,fullEffects?"requested":"lightweight mode");
+                if(adaptiveTheme||!fullEffects||Array.IndexOf(args,"--skip-intro")>=0)
+                    SkipIntro(cancel,adaptiveTheme?"adaptive theme uses visible native startup":fullEffects?"requested":"lightweight mode");
                 else try{
                     LaunchWallpaper();
                     var origin=entryPoint;
@@ -466,18 +522,25 @@ class DailyLauncher {
                         Spider.Write("session"+suffix+".json",new{status="starting",pid=Process.GetCurrentProcess().Id,port});
                     }
                     if(Native.LoopbackListener(port)!=0)throw new Exception("主题端口在启动期间被占用，请重试。");
-                    startupGuard=new StartupWindowGuard();
+                    if(!adaptiveTheme)startupGuard=new StartupWindowGuard();
                     launchOwned=true;
                     string flags="--remote-debugging-address=127.0.0.1 --remote-debugging-port="+port;
-                    using(var started=Process.Start(OfficialStart(flags,true)))if(started!=null)owned.Add(started.Id);
-                    startupGuard.Watch(owned);
+                    try{using(var started=Process.Start(OfficialStart(flags,!adaptiveTheme)))if(started!=null)owned.Add(started.Id);}
+                    catch(Exception error){
+                        if(!adaptiveTheme)throw;
+                        AdaptiveFallback(target,error.Message);
+                        return;
+                    }
+                    if(startupGuard!=null)startupGuard.Watch(owned);
                 } else {
                     int listener=Native.LoopbackListener(port);
                     if(!before.Contains(listener))throw new Exception("本机连接端口不属于本次客户端配置，已停止连接。");
                     owned.Add(listener);launchOwned=true;before.Remove(listener);
                 }
+                if(adaptiveTheme)try{LaunchSessionWallpaper();}
+                catch(Exception error){Spider.Log("wallpaper","Wallpaper could not start during adaptive launch: "+error.Message);}
                 var clock=Stopwatch.StartNew();long nextOwnership=0,nextConnection=0,unsupportedSince=-1;
-                while(clock.ElapsedMilliseconds<60000) {
+                while(clock.ElapsedMilliseconds<(adaptiveTheme?16000:60000)) {
                     if(startupGuard!=null)startupGuard.Check();
                     if(clock.ElapsedMilliseconds>=nextOwnership){RefreshOwned(before);nextOwnership=clock.ElapsedMilliseconds+1000;}
                     if(clock.ElapsedMilliseconds>=nextConnection){
@@ -485,29 +548,35 @@ class DailyLauncher {
                         if(Ready()&&Connect(false)){
                             applied=true;
                             IntPtr bound=Window();
-                            if(bound!=IntPtr.Zero&&startupGuard==null)Native.ShowWindow(bound,0);
+                            if(!adaptiveTheme&&bound!=IntPtr.Zero&&startupGuard==null)Native.ShowWindow(bound,0);
                             break;
                         }
+                        if(lastConnectionReason=="background-decode-failed"&&adaptiveTheme)break;
                         if(lastConnectionReason=="background-decode-failed")
                             throw new InvalidOperationException("主题背景未能解码。已退出开场，请重新校验主题包。");
                         if(lastConnectionReason=="unrecognized-native-surface"){
                             if(unsupportedSince<0)unsupportedSince=clock.ElapsedMilliseconds;
+                            if(clock.ElapsedMilliseconds-unsupportedSince>=5000&&adaptiveTheme)break;
                             if(clock.ElapsedMilliseconds-unsupportedSince>=5000)
                                 throw new InvalidOperationException("当前官方客户端页面不在已验证的皮肤范围内。已退出开场，可继续使用原界面。");
                         }else unsupportedSince=-1;
                     }
-                    IntPtr w=Window();if(w!=IntPtr.Zero&&startupGuard==null)Native.ShowWindow(w,0);
+                    IntPtr w=Window();if(!adaptiveTheme&&w!=IntPtr.Zero&&startupGuard==null)Native.ShowWindow(w,0);
                     if(animated&&(boot.HasExited||cancel.WaitOne(0))){
                         animated=false;SkipIntro(cancel,"intro stopped before the client was ready");
                     }
                     Thread.Sleep(75);
+                }
+                if(!applied&&adaptiveTheme){
+                    AdaptiveFallback(target,lastConnectionReason??"the official page did not match");
+                    return;
                 }
                 if(!applied)throw new Exception("真实客户端未完成界面加载，已恢复普通窗口。详细原因见本地运行记录。");
                 RecordAttachment();
                 Spider.Log("launch","Theme attached; native workspace/auth surface validated.");ready.Set();
                 if(animated&&WaitHandle.WaitAny(new WaitHandle[]{reveal,cancel},18000)!=0)
                     SkipIntro(cancel,"intro handoff was cancelled or timed out");
-                if(!Connect(false,true))throw new Exception("无法唤回真实客户端主窗口。");
+                if(!adaptiveTheme&&!Connect(false,true))throw new Exception("无法唤回真实客户端主窗口。");
                 bool shown=false;
                 for(int i=0;i<20&&!shown;i++){shown=Reveal();if(!shown)Thread.Sleep(100);}
                 if(!shown)throw new Exception("客户端窗口没有成功显示，不能判定启动通过。");
@@ -517,7 +586,7 @@ class DailyLauncher {
                 if(startupGuard!=null){startupGuard.Dispose();startupGuard=null;}
                 Reveal();
                 sessionShown=true;
-                Spider.Write("session"+suffix+".json",new { status="visible",pid=Process.GetCurrentProcess().Id,window=Window().ToInt64(),port=port,owned=launchOwned });
+                Spider.Write("session"+suffix+".json",new { status="visible",pid=Process.GetCurrentProcess().Id,window=Window().ToInt64(),port=port,owned=launchOwned,adaptiveTheme });
                 StartThemeKeeper();StartResizeCompanion();Spider.Log("launch","HANDOFF: native window verified visible.");
                 int hidden=0,absent=0;var health=Stopwatch.StartNew();
                 while(true) {
@@ -528,13 +597,19 @@ class DailyLauncher {
                             if(!ReopenBoundWindow()){restartRequested=true;break;}
                             current=Window();
                         }
-                        if(suspend.WaitOne(0)){
+                        if(suspend.WaitOne(0)&&!adaptiveTheme){
                             startupGuard=new StartupWindowGuard();startupGuard.Watch(owned);Thread.Sleep(60);
                             if(Native.IsIconic(current))Native.ShowWindow(current,9);
                             try{LaunchSessionWallpaper();if(!Connect(false))throw new Exception("重新接入主题失败，已恢复普通窗口。");Thread.Sleep(150);startupGuard.Uncover(current);suspend.Reset();}
                             finally{startupGuard.Dispose();startupGuard=null;}
                         }
-                        Reveal();hidden=0;absent=0;
+                        if(suspend.WaitOne(0)&&adaptiveTheme&&Connect(false))suspend.Reset();
+                        if(Reveal()){
+                            Spider.Write("session"+suffix+".json",new {status="visible",pid=Process.GetCurrentProcess().Id,
+                                window=Window().ToInt64(),port=port,owned=launchOwned,adaptiveTheme,reusedClient=true});
+                            Spider.Log("launch","Reused the existing official window without replaying the cold-start intro.");
+                        }
+                        hidden=0;absent=0;
                     }
                     IntPtr w=Window();
                     if(w==IntPtr.Zero){absent++;}else {
@@ -565,7 +640,7 @@ class DailyLauncher {
             bool ownsSession=state.TryGetValue("pid",out currentOwner)&&Convert.ToString(currentOwner)==Process.GetCurrentProcess().Id.ToString();
             if(ownsSession)try{using(var cancel=EventWaitHandle.OpenExisting(EventName("CancelBoot")))cancel.Set();}catch{}
             if(startupGuard!=null){startupGuard.Dispose();startupGuard=null;}
-            if(Array.IndexOf(args,"--adopt-current")<0&&launchOwned){if(Ready()){try{Connect(true);Connect(false,true);}catch{}}Reveal();}
+            if(Array.IndexOf(args,"--adopt-current")<0&&launchOwned){if(Ready()){try{Connect(true);if(!adaptiveTheme)Connect(false,true);}catch{}}Reveal();}
             if(ownsSession)Spider.Write("session"+suffix+".json",new{status="error",error=e.Message,pid=Process.GetCurrentProcess().Id,port=port,startedUtcTicks=Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks});
             MessageBox.Show(e.Message,"Spider Codex",MessageBoxButtons.OK,MessageBoxIcon.Warning);
         }finally{ResumeWallpaper();if(themeKeeper!=null){try{if(!themeKeeper.HasExited)themeKeeper.Kill();}catch{}themeKeeper.Dispose();themeKeeper=null;}if(startupGuard!=null){startupGuard.Dispose();startupGuard=null;}if(cachedWindow!=IntPtr.Zero&&Native.GetProp(cachedWindow,WindowProperty)==windowToken)Native.RemoveProp(cachedWindow,WindowProperty);if(boot!=null){try{if(!boot.HasExited)boot.Kill();}catch{}boot.Dispose();}}

@@ -14,5 +14,3 @@ test-results/
 app-data/
 agent-home/
 *.log
-assets/**/*.webp
-*.zip

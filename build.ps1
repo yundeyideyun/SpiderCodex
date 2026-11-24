@@ -12,12 +12,12 @@ $version=$match.Groups[1].Value
 $icon=if($IconPath){[IO.Path]::GetFullPath($IconPath)}else{Join-Path $projectDir 'assets\spider-knot.ico'}
 $core=@('/nologo','/target:winexe',('/win32manifest:'+$manifest),'/r:System.Windows.Forms.dll','/r:System.Drawing.dll','/r:System.Web.Extensions.dll')
 $units=@(
- @{name='SpiderCodex.exe';sources=@('Common.cs','ReleasePointer.cs','StartupWindowGuard.cs','InstalledClient.cs','RuntimeDependencies.cs','Diagnostics.cs','DailyLauncher.cs');extra=@('/r:System.Management.dll');icon=$true},
+ @{name='SpiderCodex.exe';sources=@('Common.cs','ReleasePointer.cs','StartupWindowGuard.cs','InstalledClient.cs','RuntimeDependencies.cs','Diagnostics.cs','CompatibilityRepair.cs','DailyLauncher.cs');extra=@('/r:System.Management.dll');icon=$true},
  @{name='DesktopBoot.exe';sources=@('Common.cs','BootController.cs');extra=@();icon=$false},
  @{name='DesktopWallpaper.exe';sources=@('Common.cs','DesktopWallpaper.cs');extra=@('/platform:x64','/r:Accessibility.dll',('/r:'+(Join-Path $projectDir 'Microsoft.Web.WebView2.Core.dll')),('/r:'+(Join-Path $projectDir 'Microsoft.Web.WebView2.WinForms.dll')));icon=$false},
  @{name='恢复原界面和桌面.exe';sources=@('Common.cs','RuntimeDependencies.cs','Restore.cs');extra=@();icon=$true},
  @{name='ResizeCompanion.exe';sources=@('Common.cs','ResizePreview.cs','ResizeCompanion.cs');extra=@('/r:System.Management.dll');icon=$false},
- @{name='安装 Spider Codex.exe';sources=@('Common.cs','ReleaseSelection.cs','InstalledClient.cs','RuntimeDependencies.cs','Diagnostics.cs','ReleasePointer.cs','UserSetup.cs','SetupWindow.cs');extra=@('/main:SetupWindow','/r:Microsoft.CSharp.dll');icon=$true},
+ @{name='安装 Spider Codex.exe';sources=@('Common.cs','ReleaseSelection.cs','InstalledClient.cs','RuntimeDependencies.cs','Diagnostics.cs','ReleasePointer.cs','UserSetup.cs','ClientShutdown.cs','CompatibilityRepair.cs','SetupWindow.cs');extra=@('/main:SetupWindow','/r:Microsoft.CSharp.dll');icon=$true},
  @{name='版本管理.exe';sources=@('Common.cs','ReleaseSelection.cs');extra=@();icon=$true},
  @{name='SpiderCodex.Start.exe';sources=@('Common.cs','ReleasePointer.cs','Bootstrap.cs');extra=@();icon=$true}
 )

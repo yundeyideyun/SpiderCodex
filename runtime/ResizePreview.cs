@@ -25,7 +25,7 @@ internal sealed class ResizePreview : Form {
     [DllImport("gdi32.dll",SetLastError=true)] static extern IntPtr CreateDIBSection(IntPtr dc,ref DibHeader header,uint usage,out IntPtr bits,IntPtr section,uint offset);
     [DllImport("user32.dll",SetLastError=true)] static extern bool UpdateLayeredWindow(IntPtr h,IntPtr dc,ref Native.POINT point,ref Native.POINT size,IntPtr source,ref Native.POINT origin,uint key,ref Blend blend,uint flags);
     const uint MoveSizeStart=0x000A,MoveSizeEnd=0x000B,LocationChange=0x800B;
-    const int EdgeCaptureMs=350,StableResizeMs=125,ReleasePaintMs=105,ResizeCaptureIntervalMs=105;
+    const int EdgeCaptureMs=350,IdleCaptureMs=1000,StableResizeMs=125,ReleasePaintMs=105,ResizeCaptureIntervalMs=105;
     delegate void LocationCallback(IntPtr handle,uint message,IntPtr window,int objectId,int childId,uint eventThread,uint eventTime);
     [DllImport("user32.dll",SetLastError=true)] static extern IntPtr SetWinEventHook(uint first,uint last,IntPtr module,LocationCallback callback,uint process,uint thread,uint flags);
     [DllImport("user32.dll")] static extern bool UnhookWinEvent(IntPtr hook);
@@ -346,6 +346,12 @@ internal sealed class ResizePreview : Form {
         preparedCaptionBounds=Rectangle.Empty;
         return true;
     }
+    internal static bool ScheduleIdleCapture(DateTime now,bool nearEdge,ref DateTime nextAttempt){
+        if(now<nextAttempt)return false;
+        // A rejected or obscured frame still consumes the capture budget.
+        nextAttempt=now.AddMilliseconds(nearEdge?EdgeCaptureMs:IdleCaptureMs);
+        return true;
+    }
     void Tick(){
         if(stopping){Clear();pulse.Stop();Application.ExitThread();return;}
         UpdateTarget();
@@ -374,11 +380,11 @@ internal sealed class ResizePreview : Form {
             if(DateTime.UtcNow>=releaseAt)Clear();
         }
         else if(nativeSizing)SynchronizeBounds();
-        else if((GetAsyncKeyState(1)&0x8000)==0&&(frame==null||DateTime.UtcNow>=nextCapture)){
-            var bounds=ClientBounds();
-            if(frame==null||frame.Width!=bounds.Width||frame.Height!=bounds.Height||IsSizingBorder(WindowBounds(),Cursor.Position,GetDpiForWindow(target))){
-                Cache(bounds);
-                if(frame!=null)nextCapture=DateTime.UtcNow.AddMilliseconds(EdgeCaptureMs);
+        else if((GetAsyncKeyState(1)&0x8000)==0&&now>=nextCapture){
+            bool nearEdge=IsSizingBorder(WindowBounds(),Cursor.Position,GetDpiForWindow(target));
+            if(ScheduleIdleCapture(now,nearEdge,ref nextCapture)){
+                var bounds=ClientBounds();
+                if(frame==null||frame.Size!=bounds.Size||nearEdge)Cache(bounds);
             }
         }
         if(DateTime.UtcNow>=nextLog){nextLog=DateTime.UtcNow.AddSeconds(1);Spider.Write(telemetryFile,new{starts=starts,reconciled=reconciled,nativeFallbackStarts,captionExpansions,hitTests,windowCaptures,desktopFallbacks,rejectedBands,liveResizeFrames,readyHandoffs,windowFrame,locationEvents=locationHook!=IntPtr.Zero,moveSizeEvents=moveSizeHook!=IntPtr.Zero,tracking=tracking,cached=frame!=null,target=target.ToInt64(),topmost=(Native.GetWindowLong(Handle,-20)&8)!=0});}

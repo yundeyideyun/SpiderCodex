@@ -874,12 +874,43 @@ try {
     !document.documentElement.style.getPropertyValue('--spider-rail-top');
   const codeRestored=!codeShadow.getElementById('spider-code-surface')&&!codeHost.hasAttribute('data-spider-code-surface')&&getComputedStyle(codeToken).color==='rgb(13, 13, 13)';
   const resizeCases=await resizeWorkspace();
+  const adaptiveModule=await import('/theme-fixture-module.mjs');
+  const adaptiveConfig={wallpaper:replacementSource,adaptive:true};
+  root.replaceChildren(unrecognized);
+  const adaptiveRefused=adaptiveModule.default(adaptiveConfig).reason==='unrecognized-native-surface'&&
+    !document.documentElement.hasAttribute('data-spider-codex')&&!window.__SPIDER_CODEX_V3__;
+  const adaptiveRail=document.createElement('aside');
+  adaptiveRail.className='app-shell-left-panel';
+  adaptiveRail.innerHTML='<nav class="group/sidebar-rail"><button>Home</button></nav>';
+  const adaptiveWorkspace=document.createElement('main');
+  adaptiveWorkspace.setAttribute('data-app-shell-main-surface','');
+  adaptiveWorkspace.innerHTML='<textarea data-codex-composer></textarea>';
+  root.replaceChildren(adaptiveRail,adaptiveWorkspace);
+  const adaptiveApplied=adaptiveModule.default(adaptiveConfig).active===true;
+  root.replaceChildren(adaptiveRail,unrecognized);
+  window.__SPIDER_CODEX_V3__?.refresh();
+  const adaptiveSuspended=document.documentElement.dataset.spiderCodex==='suspended'&&
+    colors('native-unknown').background==='rgb(255, 255, 255)';
+  root.replaceChildren(adaptiveRail,adaptiveWorkspace);
+  window.__SPIDER_CODEX_V3__?.refresh();
+  const adaptiveReturned=window.__SPIDER_CODEX_V3__?.diagnose().active===true;
+  window.__SPIDER_CODEX_V3__?.remove();
+  adaptiveWorkspace.removeAttribute('data-app-shell-main-surface');
+  adaptiveWorkspace.setAttribute('data-new-main','');
+  const movedComposer=adaptiveWorkspace.querySelector('textarea');
+  movedComposer.removeAttribute('data-codex-composer');
+  movedComposer.setAttribute('data-new-composer','');
+  const repairNeeded=adaptiveModule.default(adaptiveConfig).active===false;
+  const repairApplied=adaptiveModule.default({...adaptiveConfig,layoutRepair:{
+    mainAttribute:'data-new-main',composerAttribute:'data-new-composer'}}).active===true;
+  window.__SPIDER_CODEX_V3__?.remove();
   send({kind: 'surfaceFixture', themeVersion: theme.version, authStyled, settingsContinuous,languageListContained,
+    adaptiveRefused,adaptiveApplied,adaptiveSuspended,adaptiveReturned,repairNeeded,repairApplied,
     popoversReadable, usageBackedByArtwork, roleTagReleased, workspaceStyled, plainRepliesSkipFullScan, insertedActivityStillStyled, workspaceLoadingBacked, bareLoadingBacked, earlyPreviewBacked, earlyPreviewRespectsUnknownPage, unknownUndisturbed, incompleteProfileUntouched, knownProfileStyled, pickerRecovered, workspaceRecovered, newFeatureStandard, restored, floating,integratedSettingsStyled,externalSettingsHostSafe,portalSettingsRecognized,narrowMenuMetrics,colorPickerPreserved,quotaPresentation:!!quotaPresentation,codePresentation,lazyCodeTokenReadable,codeRestored,dockSendGlass,composerBlocksTranscript,reducedMotionKeepsOrientation,
     geometryBefore,geometryAfter,geometryChanged,framing,composerAndReply,readings,selectedVisible,fieldBoundary,focus,focusVisible,disabledStillDisabled,sidebarReadable,topMenuReadable,popupOpaque,railsFadeTogether,threeLevelsReadable,
     homeAttributeWritesDuring90TextUpdates: writes, liveAuthenticatedSettingsTest: false, resizeCases, embeddedAnchorStable, activityLabelsReadable, settingsChildStyled, narrowMenuReadable,recycledPanelClean,authActionRestyled,recycledIconVisible,
     artworkChanged,artworkReused,artworkReleased,sameVersionHotUpdate,preparedTexturesShort,primaryStatesUnified,primaryDisabledDistinct,popupFirstPaintAligned,reflectionNonInteractive,compactControlComfortable,switchShapeAligned,fileCardCornersAligned,fileFocusContained,standalonePopupNotFlattened,miniPreviewIntegrated,pluginLogoPreservesColor,rowHasSeparateSurface,unrelatedScrollKeepsHover,ancestorScrollReleasesHover,activityHasOneSurface,thinStatusProportional,statusUsesNativeShell,mediaBoundaryAligned,openingFrames,nativeAttachmentReport,nativeAttachmentDetails,nativeAttachmentStyled,attachmentHover,popupStyledPromptly,searchAppearance,sliderAppearance,rolelessPopupCovered,controlsBlend,controlledPopupRestored,selectedGlass,languageBlend,searchIntegrated,generalIconReadable,diffControlsVisible,paletteHidesConversation,diagnosticLayoutReads,attachmentStyled,nativeIconsAndAccent,observedAttachment,nativeControlPairs,nativeControlPairsReadable,disabledTokenPreserved,
-    passed: authStyled && settingsContinuous && languageListContained && popoversReadable && usageBackedByArtwork && roleTagReleased && workspaceStyled && integratedSettingsStyled && externalSettingsHostSafe && portalSettingsRecognized && colorPickerPreserved && quotaPresentation && codePresentation && lazyCodeTokenReadable && codeRestored && dockSendGlass && composerBlocksTranscript && reducedMotionKeepsOrientation &&
+    passed: repairNeeded && repairApplied && adaptiveRefused && adaptiveApplied && adaptiveSuspended && adaptiveReturned && authStyled && settingsContinuous && languageListContained && popoversReadable && usageBackedByArtwork && roleTagReleased && workspaceStyled && integratedSettingsStyled && externalSettingsHostSafe && portalSettingsRecognized && colorPickerPreserved && quotaPresentation && codePresentation && lazyCodeTokenReadable && codeRestored && dockSendGlass && composerBlocksTranscript && reducedMotionKeepsOrientation &&
       plainRepliesSkipFullScan && insertedActivityStillStyled && workspaceLoadingBacked && bareLoadingBacked && earlyPreviewBacked && earlyPreviewRespectsUnknownPage && unknownUndisturbed && incompleteProfileUntouched && knownProfileStyled && pickerRecovered && workspaceRecovered && Object.values(newFeatureStandard).every(result=>result!==false) && restored && geometryChanged &&
       framing.onlyShiftedWhenFaceWasClipped && composerAndReply && selectedVisible && fieldBoundary && focusTreatmentExpected && disabledStillDisabled && sidebarReadable && topMenuReadable && popupOpaque && railsFadeTogether && threeLevelsReadable &&
       Object.entries(readings).every(([name,value])=>value>=(name==='attachmentIcon'?3:4.5)) && writes === 0 && resizeCases.every(item=>item.passed) && embeddedAnchorStable && activityLabelsReadable && settingsChildStyled && narrowMenuReadable && recycledPanelClean && authActionRestyled && recycledIconVisible &&

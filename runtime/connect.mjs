@@ -1,6 +1,7 @@
 import {setNativeAppearance} from './native-appearance.mjs';
 import {inClientDocument,isClientPage} from './target-scope.mjs';
 import {themeConfig} from './theme-artwork.mjs';
+import {observeLayout,saveLayoutObservation} from './layout-repair.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -33,6 +34,7 @@ async function withWindow(result){return {...result,window:await evaluate('({x:s
 const sidebarBackup=path.join(process.env.LOCALAPPDATA||root,'SpiderCodex',`appearance-sidebar-${port}.json`);
 const disabledFile=path.join(process.env.LOCALAPPDATA||root,'SpiderCodex',`theme-disabled-${port}.json`);
 const health=process.argv.includes('--health'),recover=process.argv.includes('--recover');
+const adaptive=process.argv.includes('--adaptive');
 const themeSource=await fs.readFile(path.join(root,'runtime','spider-theme.js'),'utf8');
 const themeVersion=Number(themeSource.match(/VERSION=(\d+)/)?.[1]);
 if(!Number.isInteger(themeVersion)||themeVersion<=0)throw Error('Invalid theme version');
@@ -101,16 +103,17 @@ try {
     if((health||recover)&&await disabled()){console.log(JSON.stringify({ok:true,disabled:true}));ws.close();process.exit(0);}
     if(!health&&!recover){await fs.unlink(disabledFile).catch(()=>{});await evaluate('window.__SPIDER_THEME_DISABLED__=false');}
     const existing=await evaluate('window.__SPIDER_CODEX_V3__?.diagnose()||null');
-    if(health&&existing?.version===themeVersion){console.log(JSON.stringify(await withWindow({...existing,healthOnly:true})));}
+    const matching=existing?.version===themeVersion&&!!existing.adaptive===adaptive;
+    if(health&&matching){console.log(JSON.stringify(await withWindow({...existing,healthOnly:true})));}
     else{
       if((health||recover)&&await disabled()){console.log(JSON.stringify({ok:true,disabled:true}));ws.close();process.exit(0);}
       // A previous attempt may have installed the skin before the native login
       // controls were ready. Confirm the artwork on this path as well.
-      const cached=existing?.version===themeVersion&&existing?.ok&&existing?.readyForHandoff&&existing?.active;
+      const cached=matching&&existing?.ok&&existing?.readyForHandoff&&existing?.active;
       let install='window.__SPIDER_CODEX_V3__?.diagnose()';
       if(!cached){
         const art=await fs.readFile(path.join(root,'assets','client-brighter.png'));
-        install=`${themeSource}(${JSON.stringify(await themeConfig(root,art))})`;
+        install=`${themeSource}(${JSON.stringify({...await themeConfig(root,art),adaptive})})`;
       }
       const result=await evaluate(`(async()=>{
         const result=${install};
@@ -122,6 +125,9 @@ try {
         await Promise.race([new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))),new Promise(resolve=>setTimeout(resolve,100))]);
         return {...result,backgroundDecoded:true};
       })()`);
+      if(result?.reason==='unrecognized-native-surface'&&process.env.SPIDERCODEX_REPAIR_OBSERVATION==='1'){
+        try{await saveLayoutObservation(await evaluate('('+observeLayout.toString()+')()'));}catch{}
+      }
       if(result?.version!==themeVersion){console.log(JSON.stringify(await withWindow(result)));process.exitCode=4;}
       else{
         // Reload registrations live on the keeper's persistent connection.

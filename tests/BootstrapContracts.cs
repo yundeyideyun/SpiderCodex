@@ -21,12 +21,25 @@ class BootstrapContracts{
   root=Path.Combine(Path.GetTempPath(),"Spider restart "+Guid.NewGuid().ToString("N"));
   string releases=Path.Combine(root,"releases"),old=Path.Combine(releases,"R57"),next=Path.Combine(releases,"R58");
   string pointer=Path.Combine(root,"current-release.json"),result=Path.Combine(root,"selected.json"),selected=Path.Combine(next,"SpiderCodex.exe");
-  Directory.CreateDirectory(old);Directory.CreateDirectory(next);
+  string kit=Path.Combine(root,"客户安装包"),payload=Path.Combine(kit,"payload");
+  string installer=Path.Combine(kit,"安装 Spider Codex.exe"),manifest=Path.Combine(payload,"release-manifest.json");
+  string marker=Path.Combine(root,".spider-install");
+  Directory.CreateDirectory(old);Directory.CreateDirectory(next);Directory.CreateDirectory(payload);
   try{
    if(ReleasePointer.RestartEntry(old)!=Path.Combine(old,"SpiderCodex.exe"))throw new Exception("Standalone restart changed");
    File.Copy(binary,selected);
    File.WriteAllText(pointer,Spider.Json.Serialize(new{schemaVersion=1,relativeDirectory="releases/R58",version=Spider.Version,
     programs=new System.Collections.Generic.Dictionary<string,string>{{"SpiderCodex.exe",digest}}}));
+   if(ReleasePointer.InstalledEntryForPayload(payload,root)!=null)throw new Exception("Unrelated payload directory was treated as an install kit");
+   File.WriteAllText(installer,"installer fixture");
+   File.WriteAllText(manifest,"{}");
+   bool needsInstall=false;
+   try{ReleasePointer.InstalledEntryForPayload(payload,root);}catch(InvalidOperationException e){needsInstall=e.Message.Contains("打开 Spider Codex.exe");}
+   if(!needsInstall)throw new Exception("Uninstalled payload did not guide the user to setup");
+   File.WriteAllText(marker,"SpiderCodex user installation v1");
+   if(ReleasePointer.InstalledEntryForPayload(payload,root)!=selected||
+       ReleasePointer.InstalledEntryForPayload(next,root)!=null)
+    throw new Exception("Payload did not resolve only to the installed release");
    using(var child=ReleasePointer.Start(ReleasePointer.RestartEntry(old+Path.DirectorySeparatorChar),new[]{"--restart-fixture",result,"测试 空格"})){
     if(child==null||!child.WaitForExit(4000)||child.ExitCode!=0)throw new Exception("Reopen child did not finish.");
    }
@@ -36,10 +49,12 @@ class BootstrapContracts{
    File.WriteAllText(pointer,File.ReadAllText(pointer).Replace(digest,new string('0',64)));
    bool refused=false;try{ReleasePointer.RestartEntry(old);}catch(InvalidOperationException){refused=true;}
    if(!refused)throw new Exception("Invalid restart pointer accepted");
+   refused=false;try{ReleasePointer.InstalledEntryForPayload(payload,root);}catch(InvalidOperationException){refused=true;}
+   if(!refused)throw new Exception("Payload accepted modified installed entry");
   }finally{
-   foreach(string file in new[]{pointer,result,selected})File.Delete(file);
-   foreach(string directory in new[]{old,next,releases,root})Directory.Delete(directory);
+   foreach(string file in new[]{pointer,result,selected,installer,manifest,marker})File.Delete(file);
+   foreach(string directory in new[]{payload,kit,old,next,releases,root})Directory.Delete(directory);
   }
-  Console.WriteLine(Spider.Json.Serialize(new{passed=true,validVersionedPath=true,unsafePathsRejected=rejected,changedHashRejected=changed,changedVersionRejected=wrongVersion,reopenedSelectedRelease=true,rejectedCorruptRestartPointer=true,processLaunches=1}));
+  Console.WriteLine(Spider.Json.Serialize(new{passed=true,validVersionedPath=true,unsafePathsRejected=rejected,changedHashRejected=changed,changedVersionRejected=wrongVersion,reopenedSelectedRelease=true,rejectedCorruptRestartPointer=true,packagedEntryUsesInstalledRelease=true,packagedEntryRequiresInstall=true,processLaunches=1}));
  }
 }

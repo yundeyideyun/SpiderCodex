@@ -10,7 +10,14 @@ internal sealed class InstalledClient {
   "26.1117.3838.0",
   "26.1117.4957.0"
  };
+ // These packages passed a real cold start, intro handoff and unauthenticated
+ // theme check. The renderer still gates every individual supported surface.
+ static readonly HashSet<string> StartupVerifiedVersions=new HashSet<string>(StringComparer.Ordinal){
+  "26.1120.5083.0"
+ };
  internal string Executable,InstallDirectory,PackageFamily,ApplicationId,Version,NativeAppId,CompatibilityReason;
+ internal bool StartupOnlyVerified;
+ internal bool CanTryAdaptiveTheme;
  internal bool ThemeCompatible {get{return CompatibilityReason==null;}}
 
  [ComImport,Guid("2e941141-7f97-4756-ba1d-9decde894a3d"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -26,14 +33,21 @@ internal sealed class InstalledClient {
   result.Version=version;
   result.NativeAppId=null;
   result.CompatibilityReason=null;
+  result.StartupOnlyVerified=StartupVerifiedVersions.Contains(version)&&!ReviewedVersions.Contains(version);
   var prefix=family+"!";
   var valid=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
   foreach(var id in registeredApps)if(id!=null&&id.StartsWith(prefix,StringComparison.OrdinalIgnoreCase)&&Regex.IsMatch(id.Substring(prefix.Length),@"\A[A-Za-z0-9][A-Za-z0-9.-]{0,63}\z"))valid.Add(id);
   var preferred=prefix+result.ApplicationId;
   if(result.ApplicationId!=null&&valid.Contains(preferred))result.NativeAppId=preferred;
   else if(valid.Count==1)foreach(var id in valid)result.NativeAppId=id;
-  if(!ReviewedVersions.Contains(version))result.CompatibilityReason="official-version-not-reviewed";
+  if(!ReviewedVersions.Contains(version)&&!result.StartupOnlyVerified)result.CompatibilityReason="official-version-not-reviewed";
   else if(protocolEntry==null)result.CompatibilityReason="official-entry-changed";
+  System.Version packageVersion;
+  result.CanTryAdaptiveTheme=result.CompatibilityReason=="official-version-not-reviewed"&&protocolEntry!=null&&
+   System.Version.TryParse(version,out packageVersion)&&packageVersion>new System.Version("26.1120.5083.0")&&
+   String.Equals(result.ApplicationId,"App",StringComparison.OrdinalIgnoreCase)&&
+   String.Equals(result.NativeAppId,prefix+result.ApplicationId,StringComparison.OrdinalIgnoreCase)&&
+   String.Equals(result.Executable,Path.Combine(directory,"app","ChatGPT.exe"),StringComparison.OrdinalIgnoreCase);
   return result;
  }
 
@@ -102,6 +116,7 @@ internal sealed class InstalledClient {
   return result;
  }
  internal object Describe(){return new{executable=Executable,packageFamily=PackageFamily,applicationId=ApplicationId,packageVersion=Version,
-  entryKind=ThemeCompatible?"registered-package-executable":"registered-native-app",activationProtocol=ThemeCompatible?"codex":null,
-  appUserModelId=NativeAppId,themeCompatible=ThemeCompatible,compatibilityReason=CompatibilityReason,usesDeprecatedAlias=false};}
+  entryKind=ThemeCompatible||CanTryAdaptiveTheme?"registered-package-executable":"registered-native-app",activationProtocol=ThemeCompatible||CanTryAdaptiveTheme?"codex":null,
+  appUserModelId=NativeAppId,themeCompatible=ThemeCompatible,compatibilityReason=CompatibilityReason,
+  startupOnlyVerified=StartupOnlyVerified,adaptiveThemeEligible=CanTryAdaptiveTheme,usesDeprecatedAlias=false};}
 }

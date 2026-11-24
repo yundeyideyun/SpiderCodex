@@ -5,7 +5,7 @@ $target=[IO.Path]::GetFullPath($Destination)
 if(Test-Path -LiteralPath $target){throw 'Source export destination must be new.'}
 New-Item -ItemType Directory -Path $target | Out-Null
 foreach($dir in @('runtime','scripts','tests','docs','third-party')){New-Item -ItemType Directory -Path (Join-Path $target $dir)|Out-Null}
-foreach($file in @('README.md','package.json','build.ps1','dependencies.lock.json','.gitignore','需求与验收清单.json','需求与验收清单.md')){Copy-Item -LiteralPath (Join-Path $root $file) -Destination $target}
+foreach($file in @('README.md','package.json','build.ps1','dependencies.lock.json','.gitattributes','.gitignore','需求与验收清单.json','需求与验收清单.md')){Copy-Item -LiteralPath (Join-Path $root $file) -Destination $target}
 $obsolete=@('DesktopBoot.cs','Effects.cs','FaceReference.cs','WebReference.cs')
 Get-ChildItem -LiteralPath (Join-Path $root 'runtime') -File|Where-Object{$_.Name -notin $obsolete -and $_.Extension -in '.cs','.mjs','.js','.manifest'}|Copy-Item -Destination (Join-Path $target 'runtime')
 foreach($dir in @('scripts','tests','docs','third-party')){Get-ChildItem -LiteralPath (Join-Path $root $dir) -File|Where-Object{$_.Extension -in '.ps1','.cs','.mjs','.md','.txt','.json','.html'}|Copy-Item -Destination (Join-Path $target $dir)}

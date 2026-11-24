@@ -2,12 +2,11 @@
 (function installSpiderTheme(config) {
   'use strict';
   const KEY='__SPIDER_CODEX_V3__',VERSION=109,stylesheetRevision=installSpiderTheme.toString();
-  if(window[KEY]?.version===VERSION&&window[KEY].stylesheetRevision===stylesheetRevision&&window[KEY].healthy?.()&&window[KEY].artworkCache?.source===config.wallpaper){window[KEY].refresh();return window[KEY].diagnose();}
-  const previous=window[KEY];
-  const inheritedArtwork=previous?.healthy?.()&&config.wallpaper.startsWith('data:image/png;base64,')&&previous.artworkCache?.source===config.wallpaper?previous.artworkCache:null;
-  previous?.remove({preserveArtwork:!!inheritedArtwork});window.__SPIDER_CODEX_V2__?.remove();
-  const mainSelector='main[data-app-shell-main-surface], main.main-surface, main[class*="MainContentSurface-"]';
-  const composerSelector='[data-codex-composer],.composer-surface-chrome,[class*="ComposerLayoutRoot-"]';
+  const validRepairAttribute=name=>/^data-[a-z][a-z0-9-]{1,63}$/.test(name??'');
+  const mainAnchor='main[data-app-shell-main-surface]'+(validRepairAttribute(config.layoutRepair?.mainAttribute)?',main['+config.layoutRepair.mainAttribute+']':'');
+  const composerAnchor='[data-codex-composer]'+(validRepairAttribute(config.layoutRepair?.composerAttribute)?',['+config.layoutRepair.composerAttribute+']':'');
+  const mainSelector=mainAnchor+', main.main-surface, main[class*="MainContentSurface-"]';
+  const composerSelector=composerAnchor+',.composer-surface-chrome,[class*="ComposerLayoutRoot-"]';
   const primaryActionSelector='button:is(.bg-composer-primary,.size-token-button-composer.bg-codex-icon,.size-token-button-composer[data-composer-voice-start])';
   const menuMaterial='linear-gradient(150deg,#18111b1f,#1f142429) fixed,var(--spider-frost-layer),rgba(35,25,34,.14)';
   const opaquePopupMaterial='linear-gradient(150deg,#18111b1f,#1f142429) fixed,var(--spider-frost-layer),#30222d';
@@ -94,6 +93,28 @@
       return 'login';
     return headings.some(shown)||buttons.some(shown)?'other':'loading';
   }
+  function supportsSurface(page){
+    if(!config.adaptive)return supportedSurfaces.has(page);
+    if(page==='workspace'){
+      const main=[...document.querySelectorAll(mainAnchor)].find(shown);
+      return !!main&&[...main.querySelectorAll(composerAnchor)].some(shown)&&
+        [...document.querySelectorAll(railSelector)].some(shown);
+    }
+    if(page==='login'){
+      return [...document.querySelectorAll('#root :is(button.bg-primary-solid,button.bg-surface)')].some(shown);
+    }
+    return false;
+  }
+  const previous=window[KEY];
+  const initialSurface=config.adaptive?surface():null;
+  if(config.adaptive&&!supportsSurface(initialSurface)){
+    if(previous?.adaptive)previous.refresh();
+    return {ok:false,active:false,readyForHandoff:false,reason:initialSurface==='loading'?'native-page-loading':'unrecognized-native-surface'};
+  }
+  const layoutRevision=mainAnchor+'|'+composerAnchor;
+  if(previous?.version===VERSION&&previous.stylesheetRevision===stylesheetRevision&&previous.healthy?.()&&previous.artworkCache?.source===config.wallpaper&&previous.adaptive===!!config.adaptive&&previous.layoutRevision===layoutRevision){previous.refresh();return previous.diagnose();}
+  const inheritedArtwork=previous?.healthy?.()&&config.wallpaper.startsWith('data:image/png;base64,')&&previous.artworkCache?.source===config.wallpaper?previous.artworkCache:null;
+  previous?.remove({preserveArtwork:!!inheritedArtwork});window.__SPIDER_CODEX_V2__?.remove();
   // Keep CSS image references short while reusing the original PNG bytes.
   let artUrl=inheritedArtwork?.url??bg,ownedArtUrl=inheritedArtwork?.owned??false;
   if(!inheritedArtwork&&bg.startsWith('data:image/png;base64,')){
@@ -191,7 +212,7 @@
     if(typeof page!=='string')page=surface();
     setRoot('data-spider-surface',page);
     setRoot('data-spider-native-dark',String(nativePreference.matches));
-    const appearance=supportedSurfaces.has(page)?'on':page==='loading'?'loading':'suspended';
+    const appearance=supportsSurface(page)?'on':page==='loading'&&!config.adaptive?'loading':'suspended';
     setRoot('data-spider-codex',window.__SPIDER_THEME_DISABLED__?'suspended':appearance);
   }
   syncNativePreference();
@@ -1174,7 +1195,7 @@
   }
   let persistentGlassPanels=[];
   function refreshFloatingSurfaces(page){
-    const supported=supportedSurfaces.has(page);
+    const supported=supportsSurface(page);
     reconcileMarkers(popupTagged,'data-spider-popup-panel',supported?openControlledPopups():new Set());
     const attachment=supported&&page==='workspace'?openAttachmentPanel():null;
     reconcileMarkers(attachmentTagged,'data-spider-attachment-panel',new Set(attachment?[attachment]:[]));
@@ -1225,7 +1246,7 @@
     surfaceStatus=page;
     lastDiagnosis=null;
     observeCurrentLayout();
-    const supported=supportedSurfaces.has(page);
+    const supported=supportsSurface(page);
     const media=new Set(),sentMedia=new Set(),activitySurfaces=new Set(),activityHits=new Set(),compactSurfaces=new Set(),compactHits=new Set();
     if(supported){
       for(const image of document.querySelectorAll('main [role="button"].size-20>img,:is('+composerSelector+') img')){
@@ -1401,12 +1422,12 @@
     if(lastDiagnosis&&lastDiagnosis.appearance===appearance&&lastDiagnosis.nativeDark===nativeDark)return lastDiagnosis;
     const input=visibleFirst(composerSelector),editable=input?.matches('[contenteditable="true"],textarea,input')?input:input?.querySelector('[contenteditable="true"],textarea,input,[role="textbox"]');
     const prose=visibleFirst('[data-markdown-text-style="assistant-message"]');
-    const page=surfaceStatus??surface(),compatible=supportedSurfaces.has(page);
+    const page=surfaceStatus??surface(),compatible=supportsSurface(page);
     const active=compatible&&root.getAttribute('data-spider-codex')==='on';
     const ready=compatible&&(page!=='login'||!!visibleFirst('[data-spider-auth-primary],[data-spider-auth-secondary],[data-spider-auth-link],button.bg-primary-solid,button.bg-surface'));
     lastDiagnosis={ok:active&&ready,readyForHandoff:active&&ready,surface:page,compatible,
       reason:!compatible?(page==='loading'?'native-page-loading':'unrecognized-native-surface'):!ready?'native-controls-loading':!active?'theme-suspended':null,
-      version:VERSION,main:!!visibleFirst(mainSelector),composer:!!input,editable:!!editable,background:!!bg,clickEffects:false,appearance,nativeDark,active,proseColor:prose?getComputedStyle(prose).color:null};
+      version:VERSION,adaptive:!!config.adaptive,main:!!visibleFirst(mainSelector),composer:!!input,editable:!!editable,background:!!bg,clickEffects:false,appearance,nativeDark,active,proseColor:prose?getComputedStyle(prose).color:null};
     return lastDiagnosis;
   }
   function remove({preserveArtwork=false}={}){
@@ -1461,5 +1482,5 @@
     delete window[KEY];
   }
   clearSurfaces();
-  window[KEY]={remove,diagnose,review:()=>({...review}),refresh:clearSurfaces,healthy:()=>!removed&&root===document.documentElement&&observedBody===document.body&&style.isConnected&&layoutStyle.isConnected&&hoverLight.isConnected,version:VERSION,stylesheetRevision,wallpaperUrl:artUrl,artworkCache};return diagnose();
+  window[KEY]={remove,diagnose,review:()=>({...review}),refresh:clearSurfaces,healthy:()=>!removed&&root===document.documentElement&&observedBody===document.body&&style.isConnected&&layoutStyle.isConnected&&hoverLight.isConnected,version:VERSION,stylesheetRevision,wallpaperUrl:artUrl,artworkCache,adaptive:!!config.adaptive,layoutRevision};return diagnose();
 })

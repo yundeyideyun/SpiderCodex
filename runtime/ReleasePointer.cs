@@ -31,6 +31,19 @@ internal static class ReleasePointer {
         EnsureMatches(target,(string)programs[executable],(string)manifest["version"]);
         return target;
     }
+    internal static string InstalledEntryForPayload(string runningDirectory,string installation)
+    {
+        var payload=new DirectoryInfo(Path.GetFullPath(runningDirectory));
+        if(payload.Parent==null||!payload.Name.Equals("payload",StringComparison.OrdinalIgnoreCase)||
+            (!File.Exists(Path.Combine(payload.Parent.FullName,"安装 Spider Codex.exe"))&&
+             !File.Exists(Path.Combine(payload.Parent.FullName,"打开 Spider Codex.exe")))||
+            !File.Exists(Path.Combine(payload.FullName,"release-manifest.json")))return null;
+        string marker=Path.Combine(installation,".spider-install");
+        if(!File.Exists(marker)||File.ReadAllText(marker)!="SpiderCodex user installation v1"||
+            !File.Exists(Path.Combine(installation,"current-release.json")))
+            throw new InvalidOperationException("这是安装包里的程序。请先打开外层的「打开 Spider Codex.exe」开始安装。");
+        return VerifiedEntry(installation,"SpiderCodex.exe");
+    }
     internal const string ExperienceFile="experience.txt";
     internal static bool? ReadExperience(string root){
         string file=Path.Combine(root,ExperienceFile);

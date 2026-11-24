@@ -7,6 +7,16 @@ class ResizeFrameContracts {
             throw new InvalidOperationException("Resize preview changed an opaque edge pixel.");
     }
     static void Main(){
+        var clock=new DateTime(2026,11,24,0,0,0,DateTimeKind.Utc);
+        var next=DateTime.MinValue;
+        if(!ResizePreview.ScheduleIdleCapture(clock,false,ref next))throw new Exception("Initial idle capture was missed.");
+        for(int ms=16;ms<1000;ms+=16)
+            if(ResizePreview.ScheduleIdleCapture(clock.AddMilliseconds(ms),false,ref next))
+                throw new Exception("A rejected idle capture was retried too quickly.");
+        if(!ResizePreview.ScheduleIdleCapture(clock.AddMilliseconds(1000),true,ref next)||
+           ResizePreview.ScheduleIdleCapture(clock.AddMilliseconds(1349),true,ref next)||
+           !ResizePreview.ScheduleIdleCapture(clock.AddMilliseconds(1350),true,ref next))
+            throw new Exception("Edge capture cadence changed.");
         foreach(uint dpi in new uint[]{96,120,144,192}){
             var window=new Rectangle(-600,80,1000,800);
             if(!ResizePreview.IsSizingBorder(window,new Point(window.Right-2,window.Top+200),dpi))
@@ -83,6 +93,6 @@ class ResizeFrameContracts {
                 }
             }
         }
-        Console.WriteLine(Spider.Json.Serialize(new{passed=true,opaqueEdgeSamples=samples,resizeCases=sizes.Length,directionalSteps=expected.Length*2,blankEdgesRejected=blankEdges,officialClientInputs=0}));
+        Console.WriteLine(Spider.Json.Serialize(new{passed=true,opaqueEdgeSamples=samples,resizeCases=sizes.Length,directionalSteps=expected.Length*2,blankEdgesRejected=blankEdges,rejectedIdleCaptureThrottled=true,edgeCaptureCadencePreserved=true,officialClientInputs=0}));
     }
 }

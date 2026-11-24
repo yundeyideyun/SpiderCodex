@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
+import {parseLayoutRepair} from './layout-repair.mjs';
 
 function validWebp(bytes){
   return bytes.length>=16&&bytes.length<=2*1024*1024&&bytes.toString('ascii',0,4)==='RIFF'&&bytes.toString('ascii',8,12)==='WEBP';
@@ -23,5 +24,7 @@ export async function readPreparedGlass(assetDirectory,original){
 
 export async function themeConfig(releaseRoot,original){
   const preparedGlass=await readPreparedGlass(path.join(releaseRoot,'assets'),original);
-  return {wallpaper:'data:image/png;base64,'+original.toString('base64'),referenceBackground:true,preparedGlass};
+  let layoutRepair=null;
+  try{layoutRepair=parseLayoutRepair(JSON.parse(process.env.SPIDERCODEX_LAYOUT_REPAIR??'null'),process.env.SPIDERCODEX_OFFICIAL_VERSION);}catch{}
+  return {wallpaper:'data:image/png;base64,'+original.toString('base64'),referenceBackground:true,preparedGlass,layoutRepair};
 }

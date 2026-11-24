@@ -1,7 +1,8 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
@@ -58,8 +59,46 @@ internal sealed class UserSetup
         }finally{if(File.Exists(tmp))File.Delete(tmp);}
     }
     internal bool Managed {get{return File.Exists(Path.Combine(root,Marker)) && File.ReadAllText(Under(root,Marker))==Identity;}}
+    internal bool Installed {get{return Managed&&File.Exists(Under(root,"current-release.json"))&&File.Exists(Under(root,"SpiderCodex.exe"));}}
     internal string Current {get{return File.Exists(Path.Combine(root,"current-release.json"))?ReleaseSelection.Current(root):null;}}
-    string Link {get{return Path.Combine(desktop,"Spider Codex.lnk");}}
+    const string PrimaryShortcut="Spider Codex.lnk";
+    [DllImport("shell32.dll",CharSet=CharSet.Unicode)]
+    static extern void SHChangeNotify(uint change,uint flags,string path,IntPtr reserved);
+
+    IEnumerable<string> ShortcutPaths()
+    {
+        if(!Directory.Exists(desktop))yield break;
+        foreach(string path in Directory.EnumerateFiles(desktop,"Spider Codex*.lnk"))
+            if(Regex.IsMatch(Path.GetFileName(path),@"^Spider Codex(?: \(主题版(?: \d+)?\))?\.lnk$",RegexOptions.IgnoreCase))
+                yield return path;
+    }
+    bool IsManagedShortcut(string path)
+    {
+        try{
+            if((File.GetAttributes(path)&FileAttributes.ReparsePoint)!=0)return false;
+            dynamic shell=Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell"));
+            dynamic shortcut=shell.CreateShortcut(path);
+            string target=shortcut.TargetPath;
+            string arguments=shortcut.Arguments;
+            return string.IsNullOrWhiteSpace(arguments)&&!string.IsNullOrWhiteSpace(target)&&
+                string.Equals(Path.GetFullPath(target),Under(root,"SpiderCodex.exe"),StringComparison.OrdinalIgnoreCase);
+        }catch(IOException){return false;}
+        catch(UnauthorizedAccessException){return false;}
+        catch(COMException){return false;}
+        catch(ArgumentException){return false;}
+    }
+    internal string DesktopShortcut {get{return ShortcutPaths().FirstOrDefault(IsManagedShortcut)??Path.Combine(desktop,PrimaryShortcut);}}
+    internal bool HasDesktopShortcut {get{return ShortcutPaths().Any(IsManagedShortcut);}}
+    internal string InstalledLauncher()
+    {
+        if(!Managed)throw new IOException("请先安装 Spider Codex。");
+        ReleasePointer.VerifiedEntry(root,"SpiderCodex.exe");
+        string launcher=Under(root,"SpiderCodex.exe");
+        string receipt=Under(receipts,"SpiderCodex.exe.sha256");
+        if(!File.Exists(launcher)||!File.Exists(receipt)||File.ReadAllText(receipt)!=Digest(launcher))
+            throw new IOException("Spider Codex 的启动文件无法核验。请使用完整安装包检查安装。");
+        return launcher;
+    }
     const string ReleaseManifest="release-manifest.json";
 
     static void RequireIdle(string directory)
@@ -165,6 +204,68 @@ internal sealed class UserSetup
         if(ReleasePointer.ReadExperience(root)!=fullEffects)Write(file,fullEffects?"full":"light");
         return "已保存。下次完全退出并从桌面打开时生效。";
     }
+    internal string ExitClient()
+    {
+        if(!Managed)throw new IOException("请先安装 Spider Codex。");
+        ClientShutdown.ExitOfficialCodex();
+        ClientShutdown.StopSpiderHelpers(root,true);
+        return "Codex 和 Spider Codex 已退出。";
+    }
+
+    internal string RestoreAppearance()
+    {
+        if(!Managed)throw new IOException("请先安装 Spider Codex。");
+        string target=ReleasePointer.VerifiedEntry(root,"恢复原界面和桌面.exe");
+        using(var process=ReleasePointer.Start(target,new string[0])){
+            if(!process.WaitForExit(35000))throw new IOException("恢复外观仍在进行，请稍后重试。");
+            if(process.ExitCode!=0){
+                object error;
+                var result=Spider.Read("restore-result.json");
+                throw new IOException(result.TryGetValue("error",out error)?Convert.ToString(error):"没有收到还原完成的确认。");
+            }
+        }
+        return "已切回官方外观。当前 Codex 窗口仍可继续使用。";
+    }
+
+    internal string UninstallApplication()
+    {
+        RestoreAppearance();
+        ClientShutdown.StopSpiderHelpers(root,false);
+        string result=Uninstall();
+        try{ClearRuntimeState();}
+        catch(IOException error){throw new IOException("程序和桌面图标已移除，部分运行缓存仍被占用。"+error.Message,error);}
+        catch(UnauthorizedAccessException error){throw new IOException("程序和桌面图标已移除，部分运行缓存无法清理。"+error.Message,error);}
+        return result;
+    }
+
+    static void ClearRuntimeState()
+    {
+        if(!Directory.Exists(Spider.State))return;
+        Plain(Spider.State);
+        string cache=Under(Spider.State,"wallpaper-renderer");
+        if(Directory.Exists(cache)){
+            var folders=new Stack<string>();
+            folders.Push(cache);
+            while(folders.Count>0){
+                foreach(string path in Directory.EnumerateFileSystemEntries(folders.Pop())){
+                    Plain(path);
+                    if(Directory.Exists(path))folders.Push(path);
+                }
+            }
+            Directory.Delete(cache,true);
+        }
+        foreach(string name in new[]{"attachment.json","session.json","compatibility.json","effect-mode.json","diagnostics.json",
+            "wallpaper.json","wallpaper-layout.json","wallpaper-performance.json","wallpaper-error.json",
+            "desktop-click.json","boot-request.json","boot-state.json","boot-title.json","boot-enter.json","boot-performance.json",
+            "boot-recovery.json","boot-error.json","restore-result.json","appearance-restore.json",
+            "launch.log","wallpaper.log","boot.log","restore.log","resize-preview.log",
+            "layout-repair.json","layout-repair.previous.json","layout-observation.json"}){
+            string file=Under(Spider.State,name);
+            if(File.Exists(file))File.Delete(file);
+        }
+        Prune(Spider.State);
+    }
+
     internal string Install(string source,Action<string> readinessCheck=null,bool? fullEffects=null)
     {
         string version;
@@ -225,17 +326,30 @@ internal sealed class UserSetup
         ReleaseSelection.Switch(root,tag);
         Write(Under(receipts,"pointer-"+tag+".sha256"),Digest(pointer));
         if(fullEffects.HasValue)SaveExperience(fullEffects.Value);
-        if(File.Exists(Link))return File.Exists(Under(receipts,"shortcut.sha256")) && Digest(Link)==File.ReadAllText(Under(receipts,"shortcut.sha256")) ? "已安装 "+tag : "已安装 "+tag+"。已保留桌面上的同名快捷方式，可从安装目录打开。";
+        EnsureDesktopShortcut();
+        return "已安装 "+tag;
+    }
+    internal bool EnsureDesktopShortcut()
+    {
+        string launcher=InstalledLauncher();
+        if(HasDesktopShortcut)return true;
+        if(!Directory.Exists(desktop))throw new IOException("找不到当前 Windows 用户的桌面文件夹。");
+        string link=Path.Combine(desktop,PrimaryShortcut);
+        for(int number=1;File.Exists(link)||Directory.Exists(link);number++){
+            if(number>99)throw new IOException("桌面没有可用的 Spider Codex 快捷方式名称。");
+            link=Path.Combine(desktop,number==1?"Spider Codex (主题版).lnk":"Spider Codex (主题版 "+number+").lnk");
+        }
         string temp=Path.Combine(desktop,"SpiderCodex-"+Guid.NewGuid().ToString("N")+".lnk");
         try{
             dynamic shell=Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell"));
             dynamic shortcut=shell.CreateShortcut(temp);
-            shortcut.TargetPath=Under(root,"SpiderCodex.exe");shortcut.WorkingDirectory=root;
-            shortcut.IconLocation=Under(root,"SpiderCodex.exe")+",0";shortcut.Save();
-            Write(Under(receipts,"shortcut.sha256"),Digest(temp));
-            File.Move(temp,Link);
+            shortcut.TargetPath=launcher;shortcut.WorkingDirectory=root;
+            shortcut.IconLocation=launcher+",0";shortcut.Save();
+            File.Move(temp,link);
+            Write(Under(receipts,"shortcut.sha256"),Digest(link));
+            SHChangeNotify(0x2,0x5,link,IntPtr.Zero);
         }finally{if(File.Exists(temp))File.Delete(temp);}
-        return "已安装 "+tag;
+        return true;
     }
     // Remove only the recorded bytes. Untracked and user-edited files stay in place.
     static void RemoveMatching(string path,string expected)
@@ -278,7 +392,15 @@ internal sealed class UserSetup
         }
         Directory.CreateDirectory(Under(root,"receipts"));
         string linkReceipt=Under(receipts,"shortcut.sha256");
-        if(File.Exists(linkReceipt)){RemoveMatching(Link,File.ReadAllText(linkReceipt));File.Delete(linkReceipt);}
+        string legacyDigest=File.Exists(linkReceipt)?File.ReadAllText(linkReceipt).Trim():null;
+        foreach(string link in ShortcutPaths().ToArray()){
+            if((File.GetAttributes(link)&FileAttributes.ReparsePoint)!=0)continue;
+            if(IsManagedShortcut(link)||(Path.GetFileName(link).Equals(PrimaryShortcut,StringComparison.OrdinalIgnoreCase)&&legacyDigest!=null&&Digest(link)==legacyDigest)){
+                File.Delete(link);
+                SHChangeNotify(0x4,0x5,link,IntPtr.Zero);
+            }
+        }
+        if(File.Exists(linkReceipt))File.Delete(linkReceipt);
         string pointer=Under(root,"current-release.json");
         foreach(var hash in Directory.GetFiles(receipts,"pointer-R*.sha256")){
             Plain(hash);RemoveMatching(pointer,File.ReadAllText(hash));File.Delete(hash);

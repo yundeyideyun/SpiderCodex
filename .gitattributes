@@ -1,0 +1,2 @@
+# The source manifest verifies exact bytes, including line endings.
+* -text

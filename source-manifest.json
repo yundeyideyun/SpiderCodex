@@ -7,8 +7,12 @@
   "profilesIncluded": false,
   "files": [
     {
+      "path": ".gitattributes",
+      "sha256": "CD1651E05B2D0F9288A9DB3CF65FE216D9AFFA1D014126363ACDC39DEFD04F61"
+    },
+    {
       "path": ".gitignore",
-      "sha256": "0B3BAD915231D7912F5866DFBF0E0C04F9AD317483B14BB9FFE3983A6050C942"
+      "sha256": "84DBE0396D7FFB6CD16727B9D111C22199C052F7076FE55FDBDF781F226F0ADC"
     },
     {
       "path": "需求与验收清单.json",
@@ -48,7 +52,7 @@
     },
     {
       "path": "build.ps1",
-      "sha256": "0F394CD1CFB2FAA43DD5A90D68E4A138DB5135D62DF33050476B54750F7C8DC9"
+      "sha256": "F587C990BE02D494C3147A251906A77164DC7C5984B8AC146D2BC097326A6832"
     },
     {
       "path": "dependencies.lock.json",
@@ -68,7 +72,7 @@
     },
     {
       "path": "docs/TESTING.md",
-      "sha256": "9B19A41EC0ECBC2DCD3D9B2D8AC706C6A7B1E5A48665F45B7D658CDAA71146C8"
+      "sha256": "A75C34F424DB5B916741FE080E0CBEF35ACE2C9BC5BB3A1BB0F36D96B4D990DD"
     },
     {
       "path": "package.json",
@@ -76,7 +80,7 @@
     },
     {
       "path": "README.md",
-      "sha256": "9C04C21F3D7F78CF13B68AA0C123974D2A590692DDAAD0523023787DD2518BF6"
+      "sha256": "72E0BE0B7F1FB341B203E9326C8274CD36907382A7107AD9C6FF4729F4629210"
     },
     {
       "path": "runtime/BootController.cs",
@@ -87,16 +91,24 @@
       "sha256": "7BAC3CA1F15068D2E2B9F8784F885B4C3D9EA5EFFDF35FAD68599C6B578F6166"
     },
     {
+      "path": "runtime/ClientShutdown.cs",
+      "sha256": "F42F9A870DCD35E993BB02A1598D282BD508820FD3DE88E80BDA44E22BD1998D"
+    },
+    {
       "path": "runtime/Common.cs",
       "sha256": "128AD2E82540E128B6856AD1BACE8A8719569E75C4ED424A5071E8171FCE1334"
     },
     {
+      "path": "runtime/CompatibilityRepair.cs",
+      "sha256": "892FC6633B9B23247767BA99D0486F749D21D6AE8498E50BD7D8F18FF020BA1D"
+    },
+    {
       "path": "runtime/connect.mjs",
-      "sha256": "2DB84DC79EBB43C4A2555D7B432C7267D7392A98EA4E2343F0E39F75450DCECA"
+      "sha256": "A55A86D3D8C3DA1B820A8F54ABF378233092D9E2A9552590C3765DAA28660ED3"
     },
     {
       "path": "runtime/DailyLauncher.cs",
-      "sha256": "A441DF1E8D8BF38BAD309E342133B45E847C33ABCC32294CA09D458776DA97C4"
+      "sha256": "A3D358373ABF89F7E913BDCF4FD523E8B62A774E7C0EBFCCD804C04D599061DD"
     },
     {
       "path": "runtime/DesktopWallpaper.cs",
@@ -108,7 +120,11 @@
     },
     {
       "path": "runtime/InstalledClient.cs",
-      "sha256": "000F4A6BE04CF8258A371C49E21B50699E2B5C73DB8DD2950F8419662833EECA"
+      "sha256": "573E9962C7C651477695D6E13DC872EDC40AF31559B876CC5DDA9E3144C540F1"
+    },
+    {
+      "path": "runtime/layout-repair.mjs",
+      "sha256": "9832EA2C41EB6CD1BCD4437910489F242F95FEFD8F63BC1FE06563CCC8A93957"
     },
     {
       "path": "runtime/native-appearance.mjs",
@@ -120,7 +136,7 @@
     },
     {
       "path": "runtime/ReleasePointer.cs",
-      "sha256": "601658731D04B36190B05F1F0D31ED2683F434AF332F162EC33FBD517E9D10B2"
+      "sha256": "1B8E073A5B23FC2A427C0658393A38FBC272A1F24927883F9B442C44EC13FC20"
     },
     {
       "path": "runtime/ReleaseSelection.cs",
@@ -132,7 +148,7 @@
     },
     {
       "path": "runtime/ResizePreview.cs",
-      "sha256": "3074F4BA4B79D8FF41C8B58E1D03BF3EF31DC059CB42999C6A66C14511B0A58A"
+      "sha256": "F4D7C1DC91FE7C8C5647973F53B7CB32032D71EC9BCABA7AC6AB47CA4777EE3F"
     },
     {
       "path": "runtime/Restore.cs",
@@ -144,11 +160,11 @@
     },
     {
       "path": "runtime/SetupWindow.cs",
-      "sha256": "9BB72C0F13FEDA88E8DEBF729F126EF3CB60CDC98326A999861275AD79BB8B41"
+      "sha256": "DE60C4BF7F2A882FC3F8FCC7DC59EDB7AF546B4A183D933ED49D0E5F12B5853C"
     },
     {
       "path": "runtime/spider-theme.js",
-      "sha256": "BA003E3C4DD4D56455CB01FF21FF8EF5496C2214F6B1CC4E9A22F2DE4C9088D7"
+      "sha256": "95A552131A56BCE5775A74CB28F51114C0BA6574C294C138D9DB971E4D754239"
     },
     {
       "path": "runtime/StartupWindowGuard.cs",
@@ -160,7 +176,7 @@
     },
     {
       "path": "runtime/theme-artwork.mjs",
-      "sha256": "C9BAAE043954C1A744CF5A396E9A184C56479409C1F5A4D5F7F69BC9EEE2688F"
+      "sha256": "057CBB63BD33B9E00A37CCC9C7C972E8F87E8EFBDEF05BC23DD5F25C9C0FCD78"
     },
     {
       "path": "runtime/theme-keeper.mjs",
@@ -168,7 +184,7 @@
     },
     {
       "path": "runtime/UserSetup.cs",
-      "sha256": "4EC7758B41BC4276114A60CB95901C4E931B92EBA6D03F1A17FA6BF46F01E21C"
+      "sha256": "DF3B59E7ED521473358E314F3F0DF2A750FADA4AAC34ACC14E8176D5F2F6EFDA"
     },
     {
       "path": "scripts/audit-package.ps1",
@@ -180,7 +196,7 @@
     },
     {
       "path": "scripts/export-source.ps1",
-      "sha256": "13F6D5E36F975B9BC28BB942FB014D9A1EC56932A4B0EA4CF6E0DD131471A8E0"
+      "sha256": "D79A0FF6D9E3BC56980B99CCA8E9D6917C58B794074F25CE8CD53767D096D58A"
     },
     {
       "path": "scripts/media-pack.mjs",
@@ -192,7 +208,7 @@
     },
     {
       "path": "scripts/prepare-install-kit.ps1",
-      "sha256": "9F3A21E460064237261C6823B162396BF3EC04698451EDB438E6575243A412FC"
+      "sha256": "8BFFA3E29DF308DA241CFE3BCA8ECD442B118EAEF190BE2CC3C379FADC446853"
     },
     {
       "path": "scripts/prepare-release.ps1",
@@ -208,7 +224,7 @@
     },
     {
       "path": "scripts/test-install-kit.ps1",
-      "sha256": "34B4CA4BE0FEC0999A99CA6344CF15619CE931400C5991E7C7CF8F275F4BFEC6"
+      "sha256": "91BE3C79AAE5A6B13B1A0C4D9A467A42C02514B9A8B0FEAB655FF6A14F693621"
     },
     {
       "path": "scripts/verify-release.ps1",
@@ -220,7 +236,11 @@
     },
     {
       "path": "tests/BootstrapContracts.cs",
-      "sha256": "AA483B67CE352745E85288589EA710C1E64BFB7F7457952BFE8D82DA3EBB3B50"
+      "sha256": "9ADC79F5B1E41A7EF9E26C10DC32B129ED1A6D62A8125C737748920FBBF5A143"
+    },
+    {
+      "path": "tests/CompatibilityRepairContracts.cs",
+      "sha256": "C84A39141119FBC47925494AB00D6D85820D9D41DCD7BE17C69AA3D754A5808D"
     },
     {
       "path": "tests/DependencyContracts.cs",
@@ -229,6 +249,10 @@
     {
       "path": "tests/keeper-payload.test.mjs",
       "sha256": "000C3AE6FAB6AAA280FE1ED100062600E9E92D635B8FABBDF624915A3361CC95"
+    },
+    {
+      "path": "tests/layout-repair.test.mjs",
+      "sha256": "90A5D0CB59404F17A178325D5979F099D4FA65C85FE312AD400A546C3664358E"
     },
     {
       "path": "tests/native-client-session.mjs",
@@ -240,11 +264,11 @@
     },
     {
       "path": "tests/NativeContracts.cs",
-      "sha256": "0368C1DB66140E75A2CB3F93D043F14F7E1392DF71986BFC6E95B57E0B1EEA4A"
+      "sha256": "5E5DB480435F0178B40E492EE1FD98ED878FE467DB5496B583FBC00F1E2D4A1B"
     },
     {
       "path": "tests/ResizeFrameContracts.cs",
-      "sha256": "B634029B950C6B19A1A846CA147A4CD2B585799F45C6B01FFC498349E761F5E7"
+      "sha256": "7776C0FF380EB8EC0B400988C0DFB851A37FDCBC49BE59BBF9DC6DB3B4CFA239"
     },
     {
       "path": "tests/scene-geometry.test.mjs",
@@ -256,7 +280,7 @@
     },
     {
       "path": "tests/SetupWindowIntegration.cs",
-      "sha256": "8FB0884CC47A7F0168ADD84B16F35637D66A32E2E08DD8262FB39EBB3342822D"
+      "sha256": "1939E15ACC4401BA077FC6244E0357AE9F5745875FABA1C0A68748359BCECD9D"
     },
     {
       "path": "tests/StartupGuardContracts.cs",
@@ -272,7 +296,7 @@
     },
     {
       "path": "tests/surface-fixture.html",
-      "sha256": "CDBDEAB1BD5AE05E19C590B2A147D662330507AC43F854595250C68B36F97F59"
+      "sha256": "C4B48328CF000166C063CCFC6F7F243C66B9E89F36AACA50BAB4FF0EAF0B52A5"
     },
     {
       "path": "tests/target-scope.test.mjs",

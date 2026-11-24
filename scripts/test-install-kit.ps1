@@ -7,7 +7,7 @@ $compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $testPrograms=if($BackendOnly){@('SetupIntegration')}else{@('SetupIntegration','SetupWindowIntegration')}
 foreach($main in $testPrograms){
  $binary=Join-Path $resultsRoot ($main+'.exe')
- $sources=@('runtime\Common.cs','runtime\InstalledClient.cs','runtime\RuntimeDependencies.cs','runtime\Diagnostics.cs','runtime\UserSetup.cs','runtime\ReleaseSelection.cs','runtime\ReleasePointer.cs','runtime\SetupWindow.cs',('tests\'+$main+'.cs'))|ForEach-Object {Join-Path $root $_}
+ $sources=@('runtime\Common.cs','runtime\InstalledClient.cs','runtime\RuntimeDependencies.cs','runtime\Diagnostics.cs','runtime\UserSetup.cs','runtime\ClientShutdown.cs','runtime\CompatibilityRepair.cs','runtime\ReleaseSelection.cs','runtime\ReleasePointer.cs','runtime\SetupWindow.cs',('tests\'+$main+'.cs'))|ForEach-Object {Join-Path $root $_}
  & $compiler /nologo /target:exe ('/main:'+$main) /r:Microsoft.CSharp.dll /r:System.Web.Extensions.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll ('/out:'+$binary) @sources
  if($LASTEXITCODE -ne 0){throw 'Test compilation failed'}
  $fixture=Join-Path $resultsRoot ('fixture-'+[guid]::NewGuid().ToString('N'))

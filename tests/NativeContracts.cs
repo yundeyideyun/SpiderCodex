@@ -33,12 +33,26 @@ class NativeContracts{
    if(!verifiedUpdate.ThemeCompatible||verifiedUpdate.NativeAppId!=nativeApp)throw new Exception("Verified update lost its protocol owner");
    var currentUpdate=InstalledClient.Assess(family,"26.1117.4957.0",root,new[]{nativeApp,family+"!Companion",foreignApp},registered);
    if(!currentUpdate.ThemeCompatible||currentUpdate.NativeAppId!=nativeApp)throw new Exception("Current official update lost its protocol owner");
+   var startupUpdate=InstalledClient.Assess(family,"26.1120.5083.0",root,new[]{nativeApp},registered);
+   if(!startupUpdate.ThemeCompatible||!startupUpdate.StartupOnlyVerified)
+       throw new InvalidOperationException("Startup-verified package did not retain its limited review status");
+   var nextUpdate=InstalledClient.Assess(family,"26.1120.5084.0",root,new[]{nativeApp},registered);
+   if(nextUpdate.ThemeCompatible||nextUpdate.StartupOnlyVerified)
+       throw new InvalidOperationException("An unverified successor incorrectly inherited compatibility");
    var unverifiedPatch=InstalledClient.Assess(family,"26.1117.4958.0",root,new[]{nativeApp},registered);
    if(unverifiedPatch.ThemeCompatible)throw new Exception("A different patch version inherited approval");
    var changed=InstalledClient.Assess(family,"99.0.0.0",root,new[]{nativeApp,family+"!Companion",foreignApp},registered);
    if(changed.ThemeCompatible||changed.CompatibilityReason!="official-version-not-reviewed"||changed.NativeAppId!=nativeApp)throw new Exception("Updated client was allowed to mount the theme");
   }
   var changedEntry=InstalledClient.Assess(family,reviewed,root,new[]{nativeApp,foreignApp},null);
+  var adaptiveEntry=new InstalledClient{ApplicationId="App",Executable=Path.Combine(root,"app","ChatGPT.exe"),InstallDirectory=root};
+  var adaptive=InstalledClient.Assess(family,"26.1120.5084.0",root,new[]{family+"!App"},adaptiveEntry);
+  if(!adaptive.CanTryAdaptiveTheme||adaptive.ThemeCompatible)throw new Exception("Unreviewed matching package should only use adaptive theme");
+  var changedExecutable=new InstalledClient{ApplicationId="App",Executable=Path.Combine(root,"app","Unknown.exe"),InstallDirectory=root};
+  if(InstalledClient.Assess(family,"26.1120.5084.0",root,new[]{family+"!App"},changedExecutable).CanTryAdaptiveTheme)
+      throw new Exception("Changed executable incorrectly qualified for adaptive theme");
+  if(InstalledClient.Assess(family,"26.1120.5084.0",root,new[]{family+"!Other"},adaptiveEntry).CanTryAdaptiveTheme)
+      throw new Exception("A different registered application qualified for adaptive theme");
   if(changedEntry.ThemeCompatible||changedEntry.CompatibilityReason!="official-entry-changed"||changedEntry.NativeAppId!=nativeApp)throw new Exception("Changed registration did not preserve the native entry");
   var ambiguous=InstalledClient.Assess(family,"99.0.0.0",root,new[]{nativeApp,family+"!Other",foreignApp},null);
   var foreignOnly=InstalledClient.Assess(family,"99.0.0.0",root,new[]{foreignApp,family+"!Shell\\invalid"},null);
@@ -65,6 +79,6 @@ class NativeContracts{
    if(alternate<1024||alternate>65535||alternate==original||Native.LoopbackListener(original)!=Process.GetCurrentProcess().Id)
      throw new Exception("Automatic port selection did not preserve the existing listener");
   }finally{occupied.Stop();}
-  Console.WriteLine(Spider.Json.Serialize(new{passed=true,argumentRoundTrips=samples.Length,routeChecks=9,packageEntryChecks=3,protocolOwnerChecks=4,upgradeCompatibilityChecks=9,multiScreenCoverageChecks=3,bootCoordinateChecks=5,occupiedLoopbackPreserved=true}));
+  Console.WriteLine(Spider.Json.Serialize(new{passed=true,argumentRoundTrips=samples.Length,routeChecks=9,packageEntryChecks=3,protocolOwnerChecks=4,upgradeCompatibilityChecks=11,multiScreenCoverageChecks=3,bootCoordinateChecks=5,occupiedLoopbackPreserved=true}));
  }
 }
